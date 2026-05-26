@@ -1,0 +1,204 @@
+# Render Blueprint — NSE Market Analytics Platform
+# https://render.com/docs/blueprint-spec
+#
+# DEPLOYMENT ORDER:
+#   1. Push this repo to GitHub
+#   2. Create a new Blueprint on Render pointing to this repo
+#   3. Render will provision: PostgreSQL, Redis, backend, ai-service, frontend
+#   4. After backend is live, copy its URL (e.g. https://nse-backend.onrender.com)
+#   5. In Render dashboard → nse-frontend → Environment, set:
+#        NEXT_PUBLIC_API_URL = https://nse-backend.onrender.com
+#        NEXT_PUBLIC_WS_URL  = wss://nse-backend.onrender.com
+#   6. Manually deploy (or redeploy) nse-frontend to pick up those values
+#   7. Update CORS_ORIGINS on nse-backend to the frontend URL for production security
+
+services:
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  - type: redis
+    name: nse-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  # ── NestJS Backend API ───────────────────────────────────────────────────────
+  - type: web
+    name: nse-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_SECRET
+        generateValue: true
+      # Allow all origins initially; tighten to frontend URL after first deploy
+      - key: CORS_ORIGINS
+        value: "*"
+
+      # PostgreSQL — auto-wired from managed database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nse-postgres
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: nse-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: nse-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: nse-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: nse-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: nse-postgres
+          property: password
+      - key: POSTGRES_SSL
+        value: "true"
+
+      # Redis — auto-wired from managed Redis
+      - key: REDIS_HOST
+        fromService:
+          name: nse-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: nse-redis
+          type: redis
+          property: port
+      - key: REDIS_PASSWORD
+        fromService:
+          name: nse-redis
+          type: redis
+          property: password
+
+      # Auth
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+
+      # AI service internal URL
+      - key: AI_SERVICE_URL
+        fromService:
+          name: nse-ai-service
+          type: web
+          property: url
+
+      # NSE scraper settings
+      - key: NSE_REQUEST_TIMEOUT
+        value: 30000
+      - key: NSE_RETRY_ATTEMPTS
+        value: 3
+      - key: NSE_RETRY_DELAY
+        value: 5000
+      - key: NSE_RATE_LIMIT_RPM
+        value: 10
+      - key: SCHEDULER_TIMEZONE
+        value: Asia/Kolkata
+      - key: SCHEDULER_CRON
+        value: "30 18 * * 1-5"
+
+      # Logging / rate-limiting
+      - key: LOG_LEVEL
+        value: info
+      - key: THROTTLE_TTL
+        value: 60
+      - key: THROTTLE_LIMIT
+        value: 100
+
+      # Set these manually in the Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+
+  # ── Python FastAPI AI Service ─────────────────────────────────────────────────
+  - type: web
+    name: nse-ai-service
+    runtime: docker
+    dockerfilePath: ./ai-service/Dockerfile
+    dockerContext: ./ai-service
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nse-postgres
+          property: connectionString
+      - key: REDIS_HOST
+        fromService:
+          name: nse-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: nse-redis
+          type: redis
+          property: port
+      - key: REDIS_PASSWORD
+        fromService:
+          name: nse-redis
+          type: redis
+          property: password
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Set these manually in the Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # ── Next.js Frontend ──────────────────────────────────────────────────────────
+  - type: web
+    name: nse-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_APP_NAME
+        value: NSE Market Analytics
+      # IMPORTANT: set these after nse-backend is deployed (see top of file)
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false
+
+# ── Managed PostgreSQL ──────────────────────────────────────────────────────────
+databases:
+  - name: nse-postgres
+    databaseName: nse_market
+    user: nse_user
+    plan: free
