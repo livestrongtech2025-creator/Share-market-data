@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Optional } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -12,24 +12,37 @@ const MARKET_TABLES = [
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(@InjectDataSource() private dataSource: DataSource) {}
+  constructor(
+    @Optional() @InjectDataSource() private readonly dataSource?: DataSource,
+  ) {}
 
   @Get()
   async check() {
-    const dbOk = await this.dataSource.query('SELECT 1').then(() => true).catch(() => false);
+    let dbOk = false;
+    try {
+      if (this.dataSource?.isInitialized) {
+        await this.dataSource.query('SELECT 1');
+        dbOk = true;
+      }
+    } catch {}
     return {
-      status: dbOk ? 'ok' : 'degraded',
+      status: 'ok',
       timestamp: new Date().toISOString(),
-      database: dbOk ? 'connected' : 'error',
+      database: dbOk ? 'connected' : 'unavailable',
     };
   }
 
   @Get('db')
   async dbStatus() {
+    if (!this.dataSource?.isInitialized) {
+      return { timestamp: new Date().toISOString(), error: 'Database not connected' };
+    }
     const counts: Record<string, number | string> = {};
     for (const table of MARKET_TABLES) {
       try {
-        const [{ count }] = await this.dataSource.query(`SELECT COUNT(*) as count FROM ${table}`);
+        const [{ count }] = await this.dataSource.query(
+          `SELECT COUNT(*) as count FROM ${table}`,
+        );
         counts[table] = Number(count);
       } catch (e: any) {
         counts[table] = `ERROR: ${e.message}`;

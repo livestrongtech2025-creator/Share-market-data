@@ -33,8 +33,8 @@ import { AppController } from './app.controller';
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: false,
           logging: config.get<string>('NODE_ENV') === 'development',
-          retryAttempts: 3,
-          retryDelay: 3000,
+          retryAttempts: 10,
+          retryDelay: 5000,
           extra: {
             max: 20,
             idleTimeoutMillis: 30000,
