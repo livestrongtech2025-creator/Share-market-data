@@ -11,23 +11,9 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
-  let app: any;
-  try {
-    app = await NestFactory.create(AppModule, {
-      logger: WinstonLogger,
-    });
-  } catch (err) {
-    logger.warn(`Failed to initialize with full module set: ${err.message}`);
-    // If DB is unavailable in dev, we still want the server to start
-    // Re-throw if not a DB connection error
-    if (!err.message?.includes('connect') && !err.message?.includes('ECONNREFUSED') && !err.message?.includes('password authentication')) {
-      throw err;
-    }
-    logger.warn('Starting in degraded mode (no database). Only fallback auth will work.');
-    // Try creating without TypeORM by using a simpler bootstrap
-    // For now, re-throw so the process restarts cleanly
-    process.exit(1);
-  }
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonLogger,
+  });
 
   const configService = app.get(ConfigService);
   const port = +(process.env.PORT || configService.get('APP_PORT') || 3001);

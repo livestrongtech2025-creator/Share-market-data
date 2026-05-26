@@ -26,25 +26,38 @@ import { AppController } from './app.controller';
     // Database
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get('POSTGRES_HOST', 'localhost'),
-        port: config.get<number>('POSTGRES_PORT', 5432),
-        username: config.get('POSTGRES_USER', 'nse_user'),
-        password: config.get('POSTGRES_PASSWORD', 'nse_secure_pass_2024'),
-        database: config.get('POSTGRES_DB', 'nse_market'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
-        logging: config.get('NODE_ENV') === 'development',
-        ssl: config.get('POSTGRES_SSL') === 'true' ? { rejectUnauthorized: false } : false,
-        retryAttempts: 0,        // Don't block startup if DB is unavailable
-        retryDelay: 3000,
-        extra: {
-          max: 20,
-          idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 2000,
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const databaseUrl = config.get<string>('DATABASE_URL');
+        const common = {
+          type: 'postgres' as const,
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: false,
+          logging: config.get('NODE_ENV') === 'development',
+          retryAttempts: 3,
+          retryDelay: 3000,
+          extra: {
+            max: 20,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 5000,
+          },
+        };
+        if (databaseUrl) {
+          return {
+            ...common,
+            url: databaseUrl,
+            ssl: { rejectUnauthorized: false },
+          };
+        }
+        return {
+          ...common,
+          host: config.get('POSTGRES_HOST', 'localhost'),
+          port: config.get<number>('POSTGRES_PORT', 5432),
+          username: config.get('POSTGRES_USER', 'nse_user'),
+          password: config.get('POSTGRES_PASSWORD', 'nse_secure_pass_2024'),
+          database: config.get('POSTGRES_DB', 'nse_market'),
+          ssl: config.get('POSTGRES_SSL') === 'true' ? { rejectUnauthorized: false } : false,
+        };
+      },
       inject: [ConfigService],
     }),
 
