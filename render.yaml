@@ -4,22 +4,16 @@
 # DEPLOYMENT ORDER:
 #   1. Push this repo to GitHub
 #   2. Create a new Blueprint on Render pointing to this repo
-#   3. Render will provision: PostgreSQL, Redis, backend, ai-service, frontend
-#   4. After backend is live, copy its URL (e.g. https://nse-backend.onrender.com)
-#   5. In Render dashboard → nse-frontend → Environment, set:
+#   3. Render will provision: backend, ai-service, frontend
+#   4. Set all database/Redis env vars manually in the Render dashboard (see sync: false below)
+#   5. After nse-backend is live, copy its URL (e.g. https://nse-backend.onrender.com)
+#   6. In Render dashboard → nse-frontend → Environment, set:
 #        NEXT_PUBLIC_API_URL = https://nse-backend.onrender.com
 #        NEXT_PUBLIC_WS_URL  = wss://nse-backend.onrender.com
-#   6. Manually deploy (or redeploy) nse-frontend to pick up those values
-#   7. Update CORS_ORIGINS on nse-backend to the frontend URL for production security
+#   7. Manually deploy (or redeploy) nse-frontend to pick up those values
+#   8. Update CORS_ORIGINS on nse-backend to the frontend URL for production security
 
 services:
-  # ── Redis ────────────────────────────────────────────────────────────────────
-  - type: redis
-    name: nse-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
-
   # ── NestJS Backend API ───────────────────────────────────────────────────────
   - type: web
     name: nse-backend
@@ -37,50 +31,29 @@ services:
       - key: CORS_ORIGINS
         value: "*"
 
-      # PostgreSQL — auto-wired from managed database
+      # PostgreSQL — set these manually in the Render dashboard
       - key: DATABASE_URL
-        fromDatabase:
-          name: nse-postgres
-          property: connectionString
+        sync: false
       - key: POSTGRES_HOST
-        fromDatabase:
-          name: nse-postgres
-          property: host
+        sync: false
       - key: POSTGRES_PORT
-        fromDatabase:
-          name: nse-postgres
-          property: port
+        sync: false
       - key: POSTGRES_DB
-        fromDatabase:
-          name: nse-postgres
-          property: database
+        sync: false
       - key: POSTGRES_USER
-        fromDatabase:
-          name: nse-postgres
-          property: user
+        sync: false
       - key: POSTGRES_PASSWORD
-        fromDatabase:
-          name: nse-postgres
-          property: password
+        sync: false
       - key: POSTGRES_SSL
         value: "true"
 
-      # Redis — auto-wired from managed Redis
+      # Redis — set these manually in the Render dashboard
       - key: REDIS_HOST
-        fromService:
-          name: nse-redis
-          type: redis
-          property: host
+        sync: false
       - key: REDIS_PORT
-        fromService:
-          name: nse-redis
-          type: redis
-          property: port
+        sync: false
       - key: REDIS_PASSWORD
-        fromService:
-          name: nse-redis
-          type: redis
-          property: password
+        sync: false
 
       # Auth
       - key: JWT_SECRET
@@ -152,25 +125,15 @@ services:
     plan: free
     healthCheckPath: /health
     envVars:
+      # PostgreSQL & Redis — set these manually in the Render dashboard
       - key: DATABASE_URL
-        fromDatabase:
-          name: nse-postgres
-          property: connectionString
+        sync: false
       - key: REDIS_HOST
-        fromService:
-          name: nse-redis
-          type: redis
-          property: host
+        sync: false
       - key: REDIS_PORT
-        fromService:
-          name: nse-redis
-          type: redis
-          property: port
+        sync: false
       - key: REDIS_PASSWORD
-        fromService:
-          name: nse-redis
-          type: redis
-          property: password
+        sync: false
       - key: LOG_LEVEL
         value: INFO
 
@@ -195,10 +158,3 @@ services:
         sync: false
       - key: NEXT_PUBLIC_WS_URL
         sync: false
-
-# ── Managed PostgreSQL ──────────────────────────────────────────────────────────
-databases:
-  - name: nse-postgres
-    databaseName: nse_market
-    user: nse_user
-    plan: free
