@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nse-config
+  namespace: nse-analytics
+data:
+  NODE_ENV: "production"
+  APP_PORT: "3001"
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "nse_market"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  SCHEDULER_TIMEZONE: "Asia/Kolkata"
+  SCHEDULER_CRON: "30 18 * * 1-5"
+  AI_MODEL: "gpt-4o-mini"
+  AI_SERVICE_URL: "http://ai-service:8000"
+  NEXT_PUBLIC_API_URL: "http://backend-service:3001"
+  LOG_LEVEL: "info"
+  THROTTLE_TTL: "60"
+  THROTTLE_LIMIT: "100"

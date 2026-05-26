@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\Sanket.Bute\\\\LST Project\\\\Share market\\\\nginx\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\Sanket.Bute\\\\LST Project\\\\Share market\\\\nginx\\\\ssl\")"
+    ]
+  }
+}
