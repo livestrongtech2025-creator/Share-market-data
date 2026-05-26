@@ -66,10 +66,12 @@ export default function BhavCopyPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('sourceDate');
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(true);
 
-  const params = buildQueryParams(filters, page, limit, search);
+  const params = { ...buildQueryParams(filters, page, limit, search), sortBy, sortOrder };
   const { data, isLoading } = useBhavCopy(params);
   const { data: seriesList } = useBhavCopySeries();
 
@@ -102,7 +104,7 @@ export default function BhavCopyPage() {
   const columns = [
     {
       key: 'symbol',
-      header: 'SYMBOL',
+      header: 'Symbol',
       sortable: true,
       render: (v: any) => (
         <span className="font-bold text-gray-900 dark:text-white tracking-wide">{v || '—'}</span>
@@ -110,7 +112,8 @@ export default function BhavCopyPage() {
     },
     {
       key: 'series',
-      header: 'SERIES',
+      header: 'Series',
+      sortable: true,
       render: (v: any) => v ? (
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
           {v}
@@ -119,42 +122,47 @@ export default function BhavCopyPage() {
     },
     {
       key: 'sourceDate',
-      header: 'DATE1',
+      header: 'Date',
       sortable: true,
       render: (v: any) => v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
     },
     {
       key: 'prevClose',
-      header: 'PREV_CLC',
+      header: 'Prev Close',
+      sortable: true,
       render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—',
     },
     {
       key: 'openPrice',
-      header: 'OPEN_PRI',
+      header: 'Open',
+      sortable: true,
       render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—',
     },
     {
       key: 'highPrice',
-      header: 'HIGH_PRI',
+      header: 'High',
+      sortable: true,
       render: (v: any) => v != null ? (
         <span className="text-green-600 dark:text-green-400 font-mono">₹{Number(v).toFixed(2)}</span>
       ) : '—',
     },
     {
       key: 'lowPrice',
-      header: 'LOW_PRI',
+      header: 'Low',
+      sortable: true,
       render: (v: any) => v != null ? (
         <span className="text-red-500 dark:text-red-400 font-mono">₹{Number(v).toFixed(2)}</span>
       ) : '—',
     },
     {
       key: 'lastPrice',
-      header: 'LAST_PRI',
+      header: 'Last',
+      sortable: true,
       render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—',
     },
     {
       key: 'closePrice',
-      header: 'CLOSE_PR',
+      header: 'Close',
       sortable: true,
       render: (v: any) => v != null ? (
         <span className="font-semibold font-mono text-gray-900 dark:text-white">₹{Number(v).toFixed(2)}</span>
@@ -162,18 +170,19 @@ export default function BhavCopyPage() {
     },
     {
       key: 'avgPrice',
-      header: 'AVG_PRIC',
+      header: 'Avg Price',
+      sortable: true,
       render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—',
     },
     {
       key: 'totalTradedQty',
-      header: 'TTL_TRD_QNTY',
+      header: 'Volume (Qty)',
       sortable: true,
       render: (v: any) => formatVolume(v),
     },
     {
       key: 'totalTradedValue',
-      header: 'TURNOVER',
+      header: 'Turnover (₹ Cr)',
       sortable: true,
       render: (v: any) => {
         if (!v) return '—';
@@ -184,17 +193,20 @@ export default function BhavCopyPage() {
     },
     {
       key: 'totalTrades',
-      header: 'NO_OF_TRADES',
+      header: 'No. of Trades',
+      sortable: true,
       render: (v: any) => v != null ? Number(v).toLocaleString('en-IN') : '—',
     },
     {
       key: 'delivQty',
-      header: 'DELIV_QT',
+      header: 'Deliv Qty',
+      sortable: true,
       render: (v: any) => v != null ? Number(v).toLocaleString('en-IN') : '—',
     },
     {
       key: 'delivPer',
-      header: 'DELIV_PER',
+      header: 'Deliv %',
+      sortable: true,
       render: (v: any) => v != null ? `${Number(v).toFixed(2)}%` : '—',
     },
     {
@@ -423,7 +435,8 @@ export default function BhavCopyPage() {
         limit={limit}
         loading={isLoading}
         onPageChange={setPage}
-        onLimitChange={setLimit}
+        onLimitChange={l => { setLimit(l); setPage(1); }}
+        onSortChange={(k, o) => { setSortBy(k); setSortOrder(o); }}
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         onExport={handleExport}
         title="Bhav Copy"

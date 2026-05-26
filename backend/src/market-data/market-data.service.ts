@@ -341,8 +341,24 @@ export class MarketDataService {
     }
 
     if (query.search && searchFields.length) {
-      const searchConditions = searchFields.map(f => `e.${f} ILIKE :search`).join(' OR ');
-      qb.andWhere(`(${searchConditions})`, { search: `%${query.search}%` });
+      const conditions = searchFields.map(f => `e.${f} ILIKE :search`).join(' OR ');
+      qb.andWhere(`(${conditions})`, { search: `%${query.search}%` });
+    }
+
+    if (query.series) {
+      qb.andWhere('e.series = :series', { series: query.series.trim().toUpperCase() });
+    }
+    if (query.minClose != null) {
+      qb.andWhere('e.ltp >= :minLtp', { minLtp: query.minClose });
+    }
+    if (query.maxClose != null) {
+      qb.andWhere('e.ltp <= :maxLtp', { maxLtp: query.maxClose });
+    }
+    if (query.minVolume != null) {
+      qb.andWhere('e.volume >= :minVol', { minVol: query.minVolume });
+    }
+    if (query.maxVolume != null) {
+      qb.andWhere('e.volume <= :maxVol', { maxVol: query.maxVolume });
     }
 
     const sortField = query.sortBy || 'sourceDate';
