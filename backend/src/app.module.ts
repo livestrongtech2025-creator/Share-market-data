@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
@@ -26,13 +26,13 @@ import { AppController } from './app.controller';
     // Database
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => {
+      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
         const databaseUrl = config.get<string>('DATABASE_URL');
         const common = {
           type: 'postgres' as const,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: false,
-          logging: config.get('NODE_ENV') === 'development',
+          logging: config.get<string>('NODE_ENV') === 'development',
           retryAttempts: 3,
           retryDelay: 3000,
           extra: {
@@ -50,12 +50,12 @@ import { AppController } from './app.controller';
         }
         return {
           ...common,
-          host: config.get('POSTGRES_HOST', 'localhost'),
+          host: config.get<string>('POSTGRES_HOST', 'localhost'),
           port: config.get<number>('POSTGRES_PORT', 5432),
-          username: config.get('POSTGRES_USER', 'nse_user'),
-          password: config.get('POSTGRES_PASSWORD', 'nse_secure_pass_2024'),
-          database: config.get('POSTGRES_DB', 'nse_market'),
-          ssl: config.get('POSTGRES_SSL') === 'true' ? { rejectUnauthorized: false } : false,
+          username: config.get<string>('POSTGRES_USER', 'nse_user'),
+          password: config.get<string>('POSTGRES_PASSWORD', 'nse_secure_pass_2024'),
+          database: config.get<string>('POSTGRES_DB', 'nse_market'),
+          ssl: config.get<string>('POSTGRES_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         };
       },
       inject: [ConfigService],
