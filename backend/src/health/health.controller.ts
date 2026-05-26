@@ -3,6 +3,12 @@ import { ApiTags } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+const MARKET_TABLES = [
+  'users', 'lower_band_hitters', 'upper_band_hitters',
+  'volume_gainers', 'most_active_equities', 'bhav_copy',
+  'ai_stock_insights', 'ai_market_summary', 'ai_alerts', 'job_logs',
+];
+
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
@@ -16,5 +22,19 @@ export class HealthController {
       timestamp: new Date().toISOString(),
       database: dbOk ? 'connected' : 'error',
     };
+  }
+
+  @Get('db')
+  async dbStatus() {
+    const counts: Record<string, number | string> = {};
+    for (const table of MARKET_TABLES) {
+      try {
+        const [{ count }] = await this.dataSource.query(`SELECT COUNT(*) as count FROM ${table}`);
+        counts[table] = Number(count);
+      } catch (e: any) {
+        counts[table] = `ERROR: ${e.message}`;
+      }
+    }
+    return { timestamp: new Date().toISOString(), tables: counts };
   }
 }
