@@ -27,9 +27,13 @@ async function bootstrap() {
   // Compression
   app.use(compression());
 
-  // CORS
+  // CORS — when CORS_ORIGINS=* we reflect the request origin so that
+  // credentials: true works (browsers reject wildcard + credentials).
+  const corsOrigins = configService.get<string>('CORS_ORIGINS', '*');
   app.enableCors({
-    origin: configService.get('CORS_ORIGINS', '*').split(','),
+    origin: corsOrigins === '*'
+      ? (_origin: string | undefined, cb: (e: Error | null, allow?: boolean) => void) => cb(null, true)
+      : corsOrigins.split(',').map(s => s.trim()),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
