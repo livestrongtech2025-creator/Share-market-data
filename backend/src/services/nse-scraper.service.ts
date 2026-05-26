@@ -20,6 +20,14 @@ const NSE_ENDPOINTS = {
   mostActive: 'https://www.nseindia.com/api/live-analysis-most-act-traded-securities',
 };
 
+// Pages that must be visited so NSE sets the right session cookies per API group
+const NSE_SESSION_PAGES = [
+  'https://www.nseindia.com',
+  'https://www.nseindia.com/market-data/live-equity-market',
+  'https://www.nseindia.com/market-data/limit-order-book-hitters',   // needed for lhrhitters API
+  'https://www.nseindia.com/market-data/most-active-equities',        // needed for live-analysis APIs
+];
+
 @Injectable()
 export class NseScraperService {
   private readonly logger = new Logger(NseScraperService.name);
@@ -46,7 +54,7 @@ export class NseScraperService {
     return {
       'User-Agent': this.getRandomUserAgent(),
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Language': 'en-IN,en-US;q=0.9,en;q=0.8',
       'Accept-Encoding': 'gzip, deflate, br',
       Connection: 'keep-alive',
       'Upgrade-Insecure-Requests': '1',
@@ -61,55 +69,82 @@ export class NseScraperService {
     return {
       'User-Agent': this.getRandomUserAgent(),
       Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Language': 'en-IN,en-US;q=0.9,en;q=0.8',
       'Accept-Encoding': 'gzip, deflate, br',
       Connection: 'keep-alive',
       Referer: 'https://www.nseindia.com/',
       'X-Requested-With': 'XMLHttpRequest',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
     };
   }
 
-  async initSession(): Promise<void> {
-    try {
-      this.logger.log('Initializing NSE session...');
-      await this.client.get('https://www.nseindia.com', {
-        headers: this.getHeaders(),
-      });
-      await this.delay(2000);
-      await this.client.get('https://www.nseindia.com/market-data/most-active-equities', {
-        headers: this.getHeaders(),
-      });
-      await this.delay(1500);
-      this.sessionInitialized = true;
-      this.logger.log('NSE session initialized successfully');
-    } catch (err) {
-      this.logger.error(`Failed to initialize NSE session: ${err.message}`);
-      this.sessionInitialized = false;
-    }
-  }
-
-  private async delay(ms: number): Promise<void> {
+  private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async fetchWithRetry<T>(url: string, retries = 3): Promise<T> {
-    if (!this.sessionInitialized) await this.initSession();
+  async initSession(): Promise<void> {
+    this.sessionInitialized = false;
+    this.jar = new CookieJar();
+    // Rebuild client with fresh jar so stale cookies don't interfere
+    this.client = wrapper(
+      axios.create({
+        jar: this.jar,
+        timeout: this.configService.get<number>('NSE_REQUEST_TIMEOUT', 30000),
+        withCredentials: true,
+      }),
+    );
 
+    this.logger.log('Initializing NSE session (visiting required pages)...');
+    for (const page of NSE_SESSION_PAGES) {
+      try {
+        await this.client.get(page, { headers: this.getHeaders() });
+        this.logger.log(`Visited: ${page}`);
+        await this.delay(2000 + Math.random() * 1000);
+      } catch (err) {
+        this.logger.warn(`Could not visit ${page}: ${err.message}`);
+      }
+    }
+    this.sessionInitialized = true;
+    this.logger.log('NSE session initialized');
+  }
+
+  private extractArray(data: any): any[] {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    // Some NSE endpoints wrap under a different key
+    for (const key of Object.keys(data || {})) {
+      if (Array.isArray(data[key])) return data[key];
+    }
+    return [];
+  }
+
+  private isHtmlResponse(data: any): boolean {
+    return typeof data === 'string' && data.trimStart().startsWith('<');
+  }
+
+  async fetchWithRetry<T>(url: string, retries = 3): Promise<T> {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        await this.delay(1000 + Math.random() * 1000);
-        const response = await this.client.get<T>(url, {
-          headers: this.getApiHeaders(),
-        });
+        if (!this.sessionInitialized) await this.initSession();
+        await this.delay(1500 + Math.random() * 1500);
+
+        const response = await this.client.get<T>(url, { headers: this.getApiHeaders() });
+
+        if (this.isHtmlResponse(response.data)) {
+          this.logger.warn(`Got HTML (blocked) for ${url} on attempt ${attempt} — re-initializing session`);
+          await this.initSession();
+          if (attempt === retries) throw new Error('NSE returned HTML (session blocked)');
+          continue;
+        }
+
         return response.data;
       } catch (err) {
         this.logger.warn(`Attempt ${attempt}/${retries} failed for ${url}: ${err.message}`);
         if (attempt === retries) throw err;
-        await this.delay(configService_retry_delay(attempt));
-        if (attempt === 2) {
-          this.sessionInitialized = false;
-          await this.initSession();
-        }
+        await this.delay(Math.min(3000 * attempt, 12000));
+        await this.initSession();
       }
     }
     throw new Error(`All ${retries} attempts failed for ${url}`);
@@ -119,7 +154,7 @@ export class NseScraperService {
     try {
       this.logger.log('Fetching Lower Band Hitters...');
       const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.lowerBand);
-      const records = data?.data || data || [];
+      const records = this.extractArray(data);
       this.logger.log(`Fetched ${records.length} lower band hitters`);
       return records;
     } catch (err) {
@@ -132,7 +167,7 @@ export class NseScraperService {
     try {
       this.logger.log('Fetching Upper Band Hitters...');
       const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.upperBand);
-      const records = data?.data || data || [];
+      const records = this.extractArray(data);
       this.logger.log(`Fetched ${records.length} upper band hitters`);
       return records;
     } catch (err) {
@@ -145,7 +180,7 @@ export class NseScraperService {
     try {
       this.logger.log('Fetching Volume Gainers...');
       const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.volumeGainers);
-      const records = data?.data || data || [];
+      const records = this.extractArray(data);
       this.logger.log(`Fetched ${records.length} volume gainers`);
       return records;
     } catch (err) {
@@ -158,7 +193,7 @@ export class NseScraperService {
     try {
       this.logger.log('Fetching Most Active Equities...');
       const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.mostActive);
-      const records = data?.data || data || [];
+      const records = this.extractArray(data);
       this.logger.log(`Fetched ${records.length} most active equities`);
       return records;
     } catch (err) {
@@ -212,26 +247,32 @@ export class NseScraperService {
     mostActive: any[];
     bhavCopy: any[];
   }> {
+    // Run sequentially — NOT in parallel. Running in parallel causes:
+    // 1. Race conditions on the shared cookie jar when one request resets the session
+    // 2. NSE rate limiting that silently returns HTML instead of JSON
     await this.initSession();
+    await this.delay(2000);
 
-    const [lowerBand, upperBand, volumeGainers, mostActive, bhavCopy] = await Promise.allSettled([
-      this.fetchLowerBandHitters(),
-      this.fetchUpperBandHitters(),
-      this.fetchVolumeGainers(),
-      this.fetchMostActiveEquities(),
-      this.fetchBhavCopy(date),
-    ]);
+    const INTER_REQUEST_DELAY = 4000;
 
-    return {
-      lowerBand: lowerBand.status === 'fulfilled' ? lowerBand.value : [],
-      upperBand: upperBand.status === 'fulfilled' ? upperBand.value : [],
-      volumeGainers: volumeGainers.status === 'fulfilled' ? volumeGainers.value : [],
-      mostActive: mostActive.status === 'fulfilled' ? mostActive.value : [],
-      bhavCopy: bhavCopy.status === 'fulfilled' ? bhavCopy.value : [],
-    };
+    const lowerBand = await this.fetchLowerBandHitters();
+    await this.delay(INTER_REQUEST_DELAY);
+
+    const upperBand = await this.fetchUpperBandHitters();
+    await this.delay(INTER_REQUEST_DELAY);
+
+    const volumeGainers = await this.fetchVolumeGainers();
+    await this.delay(INTER_REQUEST_DELAY);
+
+    const mostActive = await this.fetchMostActiveEquities();
+    await this.delay(INTER_REQUEST_DELAY);
+
+    const bhavCopy = await this.fetchBhavCopy(date);
+
+    this.logger.log(
+      `Fetch totals — LBH:${lowerBand.length} UBH:${upperBand.length} VG:${volumeGainers.length} MAE:${mostActive.length} Bhav:${bhavCopy.length}`,
+    );
+
+    return { lowerBand, upperBand, volumeGainers, mostActive, bhavCopy };
   }
-}
-
-function configService_retry_delay(attempt: number): number {
-  return Math.min(1000 * Math.pow(2, attempt), 10000);
 }
