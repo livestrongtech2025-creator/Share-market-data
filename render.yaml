@@ -63,12 +63,10 @@ services:
       - key: JWT_REFRESH_EXPIRES_IN
         value: 30d
 
-      # AI service internal URL
+      # AI service URL — set manually after nse-ai-service is deployed
+      # e.g. https://nse-ai-service.onrender.com
       - key: AI_SERVICE_URL
-        fromService:
-          name: nse-ai-service
-          type: web
-          property: url
+        sync: false
 
       # NSE scraper settings
       - key: NSE_REQUEST_TIMEOUT
