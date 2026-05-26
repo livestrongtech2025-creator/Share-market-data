@@ -18,26 +18,29 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = +(process.env.PORT || configService.get('APP_PORT') || 3001);
   const nodeEnv = configService.get('NODE_ENV') || 'development';
+  const corsOrigins = configService.get<string>('CORS_ORIGINS', '*');
+  const allowedOrigins = corsOrigins === '*' ? null : corsOrigins.split(',').map(s => s.trim());
 
-  // Security
+  // CORS — must be the very first middleware so it intercepts OPTIONS
+  // preflight before helmet or any route handler sees the request.
+  app.use((req: any, res: any, next: any) => {
+    const origin = req.headers.origin as string | undefined;
+    const allow = !allowedOrigins || (origin && allowedOrigins.includes(origin));
+    if (allow && origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    if (req.method === 'OPTIONS') return res.status(204).send();
+    next();
+  });
+
+  // Security (after CORS so preflight isn't blocked)
   app.use(helmet({
     contentSecurityPolicy: nodeEnv === 'production' ? undefined : false,
   }));
 
   // Compression
   app.use(compression());
-
-  // CORS — when CORS_ORIGINS=* we reflect the request origin so that
-  // credentials: true works (browsers reject wildcard + credentials).
-  const corsOrigins = configService.get<string>('CORS_ORIGINS', '*');
-  app.enableCors({
-    origin: corsOrigins === '*'
-      ? (_origin: string | undefined, cb: (e: Error | null, allow?: boolean) => void) => cb(null, true)
-      : corsOrigins.split(',').map(s => s.trim()),
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-  });
 
   // Global prefix
   app.setGlobalPrefix('api');
