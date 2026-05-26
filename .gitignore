@@ -20,8 +20,10 @@ __pycache__/
 .env.test.local
 .env.production.local
 
-# Logs
-logs/
+# Logs (runtime log output dirs only, not source code)
+/logs/
+/backend/logs/
+/ai-service/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
