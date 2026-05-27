@@ -14,18 +14,19 @@ const USER_AGENTS = [
 ];
 
 const NSE_ENDPOINTS = {
-  lowerBand: 'https://www.nseindia.com/api/lhrhitters?index=lband',
-  upperBand: 'https://www.nseindia.com/api/lhrhitters?index=uband',
+  // Single endpoint returns both upper + lower bands; response shape: payload[band][view].data
+  bandHitters: 'https://www.nseindia.com/api/live-analysis-price-band-hitter',
   volumeGainers: 'https://www.nseindia.com/api/live-analysis-volume-gainers',
-  mostActive: 'https://www.nseindia.com/api/live-analysis-most-act-traded-securities',
+  // NSE renamed the most-active endpoint (old live-analysis-most-act-traded-securities is 404)
+  mostActive: 'https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume',
 };
 
 // Pages that must be visited so NSE sets the right session cookies per API group
 const NSE_SESSION_PAGES = [
   'https://www.nseindia.com',
   'https://www.nseindia.com/market-data/live-equity-market',
-  'https://www.nseindia.com/market-data/limit-order-book-hitters',   // needed for lhrhitters API
-  'https://www.nseindia.com/market-data/most-active-equities',        // needed for live-analysis APIs
+  'https://www.nseindia.com/market-data/upper-band-hitters',   // needed for price-band-hitter API (replaced 404 limit-order-book-hitters)
+  'https://www.nseindia.com/market-data/most-active-equities', // needed for live-analysis APIs
 ];
 
 @Injectable()
@@ -153,8 +154,8 @@ export class NseScraperService {
   async fetchLowerBandHitters(): Promise<any[]> {
     try {
       this.logger.log('Fetching Lower Band Hitters...');
-      const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.lowerBand);
-      const records = this.extractArray(data);
+      const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.bandHitters);
+      const records: any[] = data?.lower?.AllSec?.data ?? [];
       this.logger.log(`Fetched ${records.length} lower band hitters`);
       return records;
     } catch (err) {
@@ -166,8 +167,8 @@ export class NseScraperService {
   async fetchUpperBandHitters(): Promise<any[]> {
     try {
       this.logger.log('Fetching Upper Band Hitters...');
-      const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.upperBand);
-      const records = this.extractArray(data);
+      const data = await this.fetchWithRetry<any>(NSE_ENDPOINTS.bandHitters);
+      const records: any[] = data?.upper?.AllSec?.data ?? [];
       this.logger.log(`Fetched ${records.length} upper band hitters`);
       return records;
     } catch (err) {
@@ -255,10 +256,18 @@ export class NseScraperService {
 
     const INTER_REQUEST_DELAY = 4000;
 
-    const lowerBand = await this.fetchLowerBandHitters();
-    await this.delay(INTER_REQUEST_DELAY);
-
-    const upperBand = await this.fetchUpperBandHitters();
+    // Single API call returns both bands; extracting here avoids a redundant second request
+    let lowerBand: any[] = [];
+    let upperBand: any[] = [];
+    try {
+      this.logger.log('Fetching Band Hitters...');
+      const bandData = await this.fetchWithRetry<any>(NSE_ENDPOINTS.bandHitters);
+      upperBand = bandData?.upper?.AllSec?.data ?? [];
+      lowerBand = bandData?.lower?.AllSec?.data ?? [];
+      this.logger.log(`Fetched ${upperBand.length} upper / ${lowerBand.length} lower band hitters`);
+    } catch (err) {
+      this.logger.error(`Failed to fetch band hitters: ${err.message}`);
+    }
     await this.delay(INTER_REQUEST_DELAY);
 
     const volumeGainers = await this.fetchVolumeGainers();

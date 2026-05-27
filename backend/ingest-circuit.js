@@ -46,14 +46,13 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
 
 async function initSession() {
   console.log('🌐 Initializing NSE session...');
-  // Step 1: Homepage
   await http.get('https://www.nseindia.com/', { headers: BROWSER_HEADERS });
   await delay(2500);
-  // Step 2: Visit a relevant page to get cookies
-  await http.get('https://www.nseindia.com/market-data/most-active-equities', { headers: BROWSER_HEADERS });
+  await http.get('https://www.nseindia.com/market-data/live-equity-market', { headers: BROWSER_HEADERS });
   await delay(2000);
-  // Step 3: Visit another page
-  await http.get('https://www.nseindia.com/market-data/live-market-indices', { headers: BROWSER_HEADERS });
+  await http.get('https://www.nseindia.com/market-data/upper-band-hitters', { headers: BROWSER_HEADERS });
+  await delay(2000);
+  await http.get('https://www.nseindia.com/market-data/most-active-equities', { headers: BROWSER_HEADERS });
   await delay(2000);
   console.log('✅ Session initialized');
 }
@@ -92,9 +91,18 @@ async function main() {
   await initSession();
   console.log('\n📡 Fetching circuit data...\n');
 
-  const upperBand = await fetchApi('https://www.nseindia.com/api/lhrhitters?index=uband', 'Upper Band');
-  const lowerBand = await fetchApi('https://www.nseindia.com/api/lhrhitters?index=lband', 'Lower Band');
-  const mostActive = await fetchApi('https://www.nseindia.com/api/live-analysis-most-act-traded-securities', 'Most Active');
+  // NSE changed endpoints; band hitters now return a nested object: payload[band][view].data
+  let upperBand = [], lowerBand = [];
+  try {
+    const bandRes = await http.get('https://www.nseindia.com/api/live-analysis-price-band-hitter', { headers: API_HEADERS });
+    upperBand = bandRes.data?.upper?.AllSec?.data ?? [];
+    lowerBand = bandRes.data?.lower?.AllSec?.data ?? [];
+    console.log(`✅ Upper Band: ${upperBand.length} records`);
+    console.log(`✅ Lower Band: ${lowerBand.length} records`);
+  } catch (e) {
+    console.log(`  Failed to fetch band hitters: ${e.message}`);
+  }
+  const mostActive = await fetchApi('https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume', 'Most Active');
 
   console.log('\n💾 Inserting into DB...\n');
 
