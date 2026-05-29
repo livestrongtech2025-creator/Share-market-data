@@ -27,6 +27,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=deps /app/node_modules_prod ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY package*.json ./
+COPY scripts/ ./scripts/
 
 RUN mkdir -p /app/logs && chown nestjs:nodejs /app/logs
 

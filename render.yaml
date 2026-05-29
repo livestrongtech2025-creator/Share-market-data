@@ -114,6 +114,24 @@ services:
       - key: SLACK_WEBHOOK_URL
         sync: false
 
+  # ── NSE Daily Ingestion Cron Job ─────────────────────────────────────────────
+  # Runs at 18:30 IST (13:00 UTC) every weekday — independent of the web service
+  # sleep state, so data is always fetched even if nse-backend is spun down.
+  - type: cron
+    name: nse-daily-ingestion
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    schedule: "0 13 * * 1-5"
+    startCommand: node scripts/ingest-today.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: POSTGRES_SSL
+        value: "true"
+      - key: NODE_ENV
+        value: production
+
   # ── Python FastAPI AI Service ─────────────────────────────────────────────────
   - type: web
     name: nse-ai-service

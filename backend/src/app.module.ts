@@ -45,7 +45,7 @@ import { AppController } from './app.controller';
           return {
             ...common,
             url: databaseUrl,
-            ssl: { rejectUnauthorized: false },
+            ssl: config.get<string>('POSTGRES_SSL') === 'true' ? { rejectUnauthorized: false } : false,
           };
         }
         return {
