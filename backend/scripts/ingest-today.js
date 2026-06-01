@@ -12,13 +12,20 @@ const { wrapper } = require('axios-cookiejar-support');
 const { Client } = require('pg');
 const { parse } = require('csv-parse/sync');
 
-// ── Date (IST timezone) ───────────────────────────────────────────────────────
-const istNow   = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-const yr       = istNow.getUTCFullYear();
-const mo       = String(istNow.getUTCMonth() + 1).padStart(2, '0');
-const dy       = String(istNow.getUTCDate()).padStart(2, '0');
-const TARGET_DATE   = `${yr}-${mo}-${dy}`;          // YYYY-MM-DD  (for DB)
-const BHAV_DATE_STR = `${dy}${mo}${yr}`;            // ddMMyyyy   (for URL)
+// ── Date (IST timezone, or DATE_OVERRIDE env var for manual runs) ─────────────
+let TARGET_DATE, BHAV_DATE_STR;
+if (process.env.DATE_OVERRIDE && /^\d{4}-\d{2}-\d{2}$/.test(process.env.DATE_OVERRIDE)) {
+  TARGET_DATE   = process.env.DATE_OVERRIDE;
+  const [yr, mo, dy] = TARGET_DATE.split('-');
+  BHAV_DATE_STR = `${dy}${mo}${yr}`;
+} else {
+  const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const yr     = istNow.getUTCFullYear();
+  const mo     = String(istNow.getUTCMonth() + 1).padStart(2, '0');
+  const dy     = String(istNow.getUTCDate()).padStart(2, '0');
+  TARGET_DATE   = `${yr}-${mo}-${dy}`;
+  BHAV_DATE_STR = `${dy}${mo}${yr}`;
+}
 
 // ── DB connection ─────────────────────────────────────────────────────────────
 function makeDbClient() {
