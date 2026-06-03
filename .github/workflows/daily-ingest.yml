@@ -2,8 +2,8 @@ name: Daily NSE Ingestion
 
 on:
   schedule:
-    # 13:00 UTC = 18:30 IST, Mon-Fri
-    - cron: "0 13 * * 1-5"
+    # 14:00 UTC = 19:30 IST, Mon-Fri (after NSE publishes bhav copy ~19:00 IST)
+    - cron: "0 14 * * 1-5"
   # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
     inputs:
