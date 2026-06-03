@@ -155,110 +155,114 @@ async function main() {
   const bhavCopy = await fetchBhavCopy();
   console.log('');
 
-  // ── Insert: Upper Band Hitters ─────────────────────────────────────────────
-  let ubhCount = 0;
-  for (const r of upperBand) {
-    try {
-      await db.query(
-        `INSERT INTO upper_band_hitters
-           (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,upper_band,week_52_high,week_52_low,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-         ON CONFLICT (symbol,source_date) DO NOTHING`,
-        [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
-         p(r.open), p(r.high), p(r.low), p(r.prevClose||r.prev_close),
-         p(r.ltp||r.lastPrice), p(r.chng||r.change), p(r.pChange),
-         bi(r.totalTradedVolume||r.volume), p(r.totalTradedValue),
-         p(r.upperCP), p(r['52WH']), p(r['52WL']), JSON.stringify(r)],
-      );
-      ubhCount++;
-    } catch (e) { console.log(`  UBH skip (${r.symbol}): ${e.message}`); }
+  await db.query('BEGIN');
+
+  // ── Helper: batch multi-row upsert ────────────────────────────────────────
+  async function batchUpsert(table, cols, rows, conflictSql, rowFn) {
+    const BATCH = 100;
+    let count = 0;
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const batch = rows.slice(i, i + BATCH);
+      const valClauses = [], params = [];
+      let idx = 1;
+      for (const r of batch) {
+        const vals = rowFn(r);
+        valClauses.push(`(${vals.map(() => `$${idx++}`).join(',')})`);
+        params.push(...vals);
+      }
+      try {
+        await db.query(
+          `INSERT INTO ${table} (${cols.join(',')}) VALUES ${valClauses.join(',')} ${conflictSql}`,
+          params,
+        );
+        count += batch.length;
+      } catch (e) {
+        // Fall back to row-by-row on batch error
+        for (const r of batch) {
+          try {
+            const vals = rowFn(r);
+            const ph = vals.map((_, i2) => `$${i2 + 1}`).join(',');
+            await db.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${ph}) ${conflictSql}`, vals);
+            count++;
+          } catch (_) {}
+        }
+      }
+    }
+    return count;
   }
+
+  // ── Insert: Upper Band Hitters ─────────────────────────────────────────────
+  const UBH_COLS = ['source_date','symbol','series','high_price','low_price','ltp','chng','pct_chng','volume','value','upper_band','week_52_high','week_52_low','raw_json'];
+  const UBH_CONFLICT = `ON CONFLICT (symbol,source_date) DO UPDATE SET
+    high_price=EXCLUDED.high_price, low_price=EXCLUDED.low_price,
+    ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
+    volume=EXCLUDED.volume, value=EXCLUDED.value, upper_band=EXCLUDED.upper_band,
+    week_52_high=EXCLUDED.week_52_high, week_52_low=EXCLUDED.week_52_low, raw_json=EXCLUDED.raw_json`;
+  const ubhCount = await batchUpsert('upper_band_hitters', UBH_COLS, upperBand, UBH_CONFLICT, r => {
+    const vol = r.totalTradedVol != null ? Math.round(parseFloat(r.totalTradedVol) * 1e5) : null;
+    const val = r.turnover != null ? parseFloat((parseFloat(r.turnover) * 1e7).toFixed(2)) : null;
+    return [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
+            p(r.highPrice), p(r.lowPrice), p(r.ltp), p(r.change), p(r.pChange),
+            vol, val, p(r.priceBand), p(r.yearHigh), p(r.yearLow), JSON.stringify(r)];
+  });
 
   // ── Insert: Lower Band Hitters ─────────────────────────────────────────────
-  let lbhCount = 0;
-  for (const r of lowerBand) {
-    try {
-      await db.query(
-        `INSERT INTO lower_band_hitters
-           (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,lower_band,week_52_high,week_52_low,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-         ON CONFLICT (symbol,source_date) DO NOTHING`,
-        [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
-         p(r.open), p(r.high), p(r.low), p(r.prevClose||r.prev_close),
-         p(r.ltp||r.lastPrice), p(r.chng||r.change), p(r.pChange),
-         bi(r.totalTradedVolume||r.volume), p(r.totalTradedValue),
-         p(r.lowerCP), p(r['52WH']), p(r['52WL']), JSON.stringify(r)],
-      );
-      lbhCount++;
-    } catch (e) { console.log(`  LBH skip (${r.symbol}): ${e.message}`); }
-  }
+  const LBH_COLS = ['source_date','symbol','series','high_price','low_price','ltp','chng','pct_chng','volume','value','lower_band','week_52_high','week_52_low','raw_json'];
+  const LBH_CONFLICT = `ON CONFLICT (symbol,source_date) DO UPDATE SET
+    high_price=EXCLUDED.high_price, low_price=EXCLUDED.low_price,
+    ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
+    volume=EXCLUDED.volume, value=EXCLUDED.value, lower_band=EXCLUDED.lower_band,
+    week_52_high=EXCLUDED.week_52_high, week_52_low=EXCLUDED.week_52_low, raw_json=EXCLUDED.raw_json`;
+  const lbhCount = await batchUpsert('lower_band_hitters', LBH_COLS, lowerBand, LBH_CONFLICT, r => {
+    const vol = r.totalTradedVol != null ? Math.round(parseFloat(r.totalTradedVol) * 1e5) : null;
+    const val = r.turnover != null ? parseFloat((parseFloat(r.turnover) * 1e7).toFixed(2)) : null;
+    return [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
+            p(r.highPrice), p(r.lowPrice), p(r.ltp), p(r.change), p(r.pChange),
+            vol, val, p(r.priceBand), p(r.yearHigh), p(r.yearLow), JSON.stringify(r)];
+  });
 
   // ── Insert: Volume Gainers ─────────────────────────────────────────────────
-  let vgCount = 0;
-  for (const r of volumeGainers) {
-    try {
-      const lacs = p(r.turnover);
-      const val  = r.totalTradedValue != null ? p(r.totalTradedValue)
-                 : lacs != null ? parseFloat((lacs * 1e5).toFixed(2)) : null;
-      await db.query(
-        `INSERT INTO volume_gainers
-           (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,prev_volume,volume_ratio,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-         ON CONFLICT (symbol,source_date) DO NOTHING`,
-        [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
-         p(r.open), p(r.high), p(r.low), p(r.prevClose||r.prev_close),
-         p(r.ltp||r.lastPrice), p(r.chng||r.change), p(r.pChange),
-         bi(r.totalTradedVolume||r.volume), val,
-         bi(r.week1AvgVolume), p(r.week1volChange||r.volumeRatio), JSON.stringify(r)],
-      );
-      vgCount++;
-    } catch (e) { console.log(`  VG skip (${r.symbol}): ${e.message}`); }
-  }
+  const VG_COLS = ['source_date','symbol','ltp','pct_chng','volume','value','prev_volume','volume_ratio','raw_json'];
+  const VG_CONFLICT = `ON CONFLICT (symbol,source_date) DO UPDATE SET
+    ltp=EXCLUDED.ltp, pct_chng=EXCLUDED.pct_chng, volume=EXCLUDED.volume,
+    value=EXCLUDED.value, prev_volume=EXCLUDED.prev_volume,
+    volume_ratio=EXCLUDED.volume_ratio, raw_json=EXCLUDED.raw_json`;
+  const vgCount = await batchUpsert('volume_gainers', VG_COLS, volumeGainers, VG_CONFLICT, r => {
+    const val = r.turnover != null ? parseFloat((parseFloat(r.turnover) * 1e5).toFixed(2)) : null;
+    return [TARGET_DATE, tr(r.symbol), p(r.ltp), p(r.pChange),
+            bi(r.volume), val, bi(r.week1AvgVolume), p(r.week1volChange), JSON.stringify(r)];
+  });
 
   // ── Insert: Most Active Equities ───────────────────────────────────────────
-  let maeCount = 0;
-  for (const r of mostActive) {
-    try {
-      const lacs = p(r.turnover_lacs || r.totalTradedValue);
-      const val  = r.totalTradedValue != null ? p(r.totalTradedValue)
-                 : lacs != null ? parseFloat((lacs * 1e5).toFixed(2)) : null;
-      await db.query(
-        `INSERT INTO most_active_equities
-           (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,trades,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-         ON CONFLICT (symbol,source_date) DO NOTHING`,
-        [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
-         p(r.openPrice||r.open), p(r.highPrice||r.high), p(r.lowPrice||r.low),
-         p(r.previousClose||r.prevClose), p(r.lastPrice||r.ltp),
-         p(r.change||r.chng), p(r.pChange),
-         bi(r.totalTradedVolume||r.volume), val,
-         bi(r.numberOfTrades||r.totalTrades), JSON.stringify(r)],
-      );
-      maeCount++;
-    } catch (e) { console.log(`  MAE skip (${r.symbol}): ${e.message}`); }
-  }
+  const MAE_COLS = ['source_date','symbol','series','open_price','high_price','low_price','prev_close','ltp','chng','pct_chng','volume','value','trades','raw_json'];
+  const MAE_CONFLICT = `ON CONFLICT (symbol,source_date) DO UPDATE SET
+    open_price=EXCLUDED.open_price, high_price=EXCLUDED.high_price,
+    low_price=EXCLUDED.low_price, prev_close=EXCLUDED.prev_close,
+    ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
+    volume=EXCLUDED.volume, value=EXCLUDED.value, trades=EXCLUDED.trades,
+    raw_json=EXCLUDED.raw_json`;
+  const maeCount = await batchUpsert('most_active_equities', MAE_COLS, mostActive, MAE_CONFLICT, r => [
+    TARGET_DATE, tr(r.symbol), tr(r.series||'EQ'),
+    p(r.open), p(r.dayHigh), p(r.dayLow), p(r.previousClose), p(r.lastPrice),
+    p(r.change), p(r.pChange),
+    bi(r.totalTradedVolume||r.quantityTraded), p(r.totalTradedValue),
+    bi(r.numberOfTrades), JSON.stringify(r),
+  ]);
 
-  // ── Insert: Bhav Copy ──────────────────────────────────────────────────────
-  let bhavCount = 0;
-  for (const r of bhavCopy) {
-    try {
-      await db.query(
-        `INSERT INTO bhav_copy
-           (source_date,symbol,series,open_price,high_price,low_price,close_price,last_price,prev_close,avg_price,total_traded_qty,total_traded_value,total_trades,deliv_qty,deliv_per,isin,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-         ON CONFLICT DO NOTHING`,
-        [TARGET_DATE, tr(r.SYMBOL||r.symbol), tr(r.SERIES||r.series),
-         p(r.OPEN||r.open), p(r.HIGH||r.high), p(r.LOW||r.low),
-         p(r.CLOSE||r.close), p(r.LAST||r.last), p(r.PREVCLOSE||r.prevclose),
-         p(r.AVG_PRICE||r.avg_price),
-         bi(r.TOTTRDQTY||r.ttl_trd_qnty), p(r.TOTTRDVAL||r.turnover_lacs),
-         bi(r.TOTALTRADES||r.no_of_trades),
-         bi(r.DELIV_QTY||r.deliv_qty), p(r.DELIV_PER||r.deliv_per),
-         tr(r.ISIN||r.isin), JSON.stringify(r)],
-      );
-      bhavCount++;
-    } catch (e) { /* duplicate — skip */ }
-  }
+  // ── Insert: Bhav Copy (batch 100 rows/query) ───────────────────────────────
+  // CSV columns: OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, LAST_PRICE,
+  //              PREV_CLOSE, AVG_PRICE, TTL_TRD_QNTY, TURNOVER_LACS,
+  //              NO_OF_TRADES, DELIV_QTY, DELIV_PER
+  const BHAV_COLS = ['source_date','symbol','series','open_price','high_price','low_price','close_price','last_price','prev_close','avg_price','total_traded_qty','total_traded_value','total_trades','deliv_qty','deliv_per','isin','raw_json'];
+  const bhavCount = await batchUpsert('bhav_copy', BHAV_COLS, bhavCopy, 'ON CONFLICT DO NOTHING', r => [
+    TARGET_DATE, tr(r.SYMBOL||r.symbol), tr(r.SERIES||r.series),
+    p(r.OPEN_PRICE), p(r.HIGH_PRICE), p(r.LOW_PRICE),
+    p(r.CLOSE_PRICE), p(r.LAST_PRICE), p(r.PREV_CLOSE), p(r.AVG_PRICE),
+    bi(r.TTL_TRD_QNTY), p(r.TURNOVER_LACS), bi(r.NO_OF_TRADES),
+    bi(r.DELIV_QTY), p(r.DELIV_PER), tr(r.ISIN||r.isin||''), JSON.stringify(r),
+  ]);
+
+  await db.query('COMMIT');
 
   // ── Summary ────────────────────────────────────────────────────────────────
   const total = ubhCount + lbhCount + vgCount + maeCount + bhavCount;
@@ -281,7 +285,14 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(e => {
+main().catch(async e => {
   console.error('Fatal error:', e.message);
+  try {
+    const { Client } = require('pg');
+    const db2 = makeDbClient();
+    await db2.connect();
+    await db2.query('ROLLBACK');
+    await db2.end();
+  } catch (_) {}
   process.exit(1);
 });
