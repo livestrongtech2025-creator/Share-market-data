@@ -127,30 +127,42 @@ async function main() {
   await db.connect();
   console.log('DB connected\n');
 
-  await initSession();
+  // NSE live APIs only serve the current trading session — skip them when
+  // backfilling a past date so today's data isn't stored under the wrong date.
+  const todayIST = (() => {
+    const n = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    return `${n.getUTCFullYear()}-${String(n.getUTCMonth()+1).padStart(2,'0')}-${String(n.getUTCDate()).padStart(2,'0')}`;
+  })();
+  const isToday = TARGET_DATE === todayIST;
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-  console.log('Fetching band hitters...');
-  let upperBand = [], lowerBand = [];
-  const bandData = await fetchJson('https://www.nseindia.com/api/live-analysis-price-band-hitter', 'band hitters');
-  if (bandData) {
-    upperBand = bandData?.upper?.AllSec?.data ?? [];
-    lowerBand = bandData?.lower?.AllSec?.data ?? [];
-    console.log(`  Upper: ${upperBand.length}  Lower: ${lowerBand.length}\n`);
+  let upperBand = [], lowerBand = [], volumeGainers = [], mostActive = [];
+
+  if (isToday) {
+    await initSession();
+
+    console.log('Fetching band hitters...');
+    const bandData = await fetchJson('https://www.nseindia.com/api/live-analysis-price-band-hitter', 'band hitters');
+    if (bandData) {
+      upperBand = bandData?.upper?.AllSec?.data ?? [];
+      lowerBand = bandData?.lower?.AllSec?.data ?? [];
+      console.log(`  Upper: ${upperBand.length}  Lower: ${lowerBand.length}\n`);
+    }
+    await delay(4000);
+
+    console.log('Fetching volume gainers...');
+    const vgRaw = await fetchJson('https://www.nseindia.com/api/live-analysis-volume-gainers', 'volume gainers');
+    volumeGainers = Array.isArray(vgRaw?.data) ? vgRaw.data : Array.isArray(vgRaw) ? vgRaw : [];
+    console.log(`  ${volumeGainers.length} records\n`);
+    await delay(4000);
+
+    console.log('Fetching most active equities...');
+    const maeRaw = await fetchJson('https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume', 'most active');
+    mostActive = Array.isArray(maeRaw?.data) ? maeRaw.data : Array.isArray(maeRaw) ? maeRaw : [];
+    console.log(`  ${mostActive.length} records\n`);
+    await delay(4000);
+  } else {
+    console.log(`Backfill mode — skipping live APIs (NSE only serves today's data). Importing bhav copy only.\n`);
   }
-  await delay(4000);
-
-  console.log('Fetching volume gainers...');
-  const vgRaw = await fetchJson('https://www.nseindia.com/api/live-analysis-volume-gainers', 'volume gainers');
-  const volumeGainers = Array.isArray(vgRaw?.data) ? vgRaw.data : Array.isArray(vgRaw) ? vgRaw : [];
-  console.log(`  ${volumeGainers.length} records\n`);
-  await delay(4000);
-
-  console.log('Fetching most active equities...');
-  const maeRaw = await fetchJson('https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume', 'most active');
-  const mostActive = Array.isArray(maeRaw?.data) ? maeRaw.data : Array.isArray(maeRaw) ? maeRaw : [];
-  console.log(`  ${mostActive.length} records\n`);
-  await delay(4000);
 
   const bhavCopy = await fetchBhavCopy();
   console.log('');
