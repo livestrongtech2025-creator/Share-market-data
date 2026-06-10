@@ -80,7 +80,7 @@ services:
       - key: SCHEDULER_TIMEZONE
         value: Asia/Kolkata
       - key: SCHEDULER_CRON
-        value: "30 18 * * 1-5"
+        value: "0 20 * * 1-5"
 
       # Logging / rate-limiting
       - key: LOG_LEVEL
@@ -115,14 +115,14 @@ services:
         sync: false
 
   # ── NSE Daily Ingestion Cron Job ─────────────────────────────────────────────
-  # Runs at 18:30 IST (13:00 UTC) every weekday — independent of the web service
-  # sleep state, so data is always fetched even if nse-backend is spun down.
+  # Runs at 20:00 IST (14:30 UTC) every weekday — after NSE publishes the bhav
+  # copy (~19:00 IST). Independent of the web service sleep state.
   - type: cron
     name: nse-daily-ingestion
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    schedule: "0 13 * * 1-5"
+    schedule: "30 14 * * 1-5"
     startCommand: node scripts/ingest-today.js
     envVars:
       - key: DATABASE_URL

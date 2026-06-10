@@ -13,6 +13,11 @@ const { Client } = require('pg');
 const { parse } = require('csv-parse/sync');
 
 // ── Date (IST timezone, or DATE_OVERRIDE env var for manual runs) ─────────────
+// Targets the most recently COMPLETED trading day in IST. This is resilient to
+// scheduler delays — a 20:00 IST cron that fires hours late (e.g. 03:00 IST
+// next day) still picks the previous weekday, whose bhav copy IS published.
+//   - Weekday and time >= 19:00 IST (NSE bhav publish): today
+//   - Otherwise: walk back to the previous weekday
 let TARGET_DATE, BHAV_DATE_STR;
 if (process.env.DATE_OVERRIDE && /^\d{4}-\d{2}-\d{2}$/.test(process.env.DATE_OVERRIDE)) {
   TARGET_DATE   = process.env.DATE_OVERRIDE;
@@ -20,9 +25,15 @@ if (process.env.DATE_OVERRIDE && /^\d{4}-\d{2}-\d{2}$/.test(process.env.DATE_OVE
   BHAV_DATE_STR = `${dy}${mo}${yr}`;
 } else {
   const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  const yr     = istNow.getUTCFullYear();
-  const mo     = String(istNow.getUTCMonth() + 1).padStart(2, '0');
-  const dy     = String(istNow.getUTCDate()).padStart(2, '0');
+  const beforePublish = istNow.getUTCHours() < 19;
+  const target = new Date(istNow);
+  const isWeekend = d => d.getUTCDay() === 0 || d.getUTCDay() === 6;
+  if (beforePublish || isWeekend(target)) {
+    do { target.setUTCDate(target.getUTCDate() - 1); } while (isWeekend(target));
+  }
+  const yr = target.getUTCFullYear();
+  const mo = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const dy = String(target.getUTCDate()).padStart(2, '0');
   TARGET_DATE   = `${yr}-${mo}-${dy}`;
   BHAV_DATE_STR = `${dy}${mo}${yr}`;
 }
