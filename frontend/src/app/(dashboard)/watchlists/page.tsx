@@ -2,8 +2,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { watchlistApi } from '@/lib/api';
+import PageHeader from '@/components/layout/PageHeader';
 import toast from 'react-hot-toast';
 import { Star, Plus, Trash2, X, Search } from 'lucide-react';
+import clsx from 'clsx';
 import type { Watchlist } from '@/types';
 
 export default function WatchlistsPage() {
@@ -58,25 +60,21 @@ export default function WatchlistsPage() {
   const selectedWatchlist = watchlists.find(w => w.id === selectedWl);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center">
-            <Star className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Watchlists</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Track your favourite NSE stocks</p>
-          </div>
-        </div>
-        <button onClick={() => setCreating(!creating)} className="btn-primary btn-sm">
-          <Plus className="w-4 h-4" /> New Watchlist
-        </button>
-      </div>
+    <div className="animate-fade-in space-y-6">
+      <PageHeader
+        icon={Star}
+        title="Watchlists"
+        description="Track your favourite NSE stocks"
+        accent="amber"
+        actions={
+          <button onClick={() => setCreating(!creating)} className="btn-primary btn-sm">
+            <Plus className="h-4 w-4" /> New Watchlist
+          </button>
+        }
+      />
 
-      {/* Create form */}
       {creating && (
-        <div className="card p-4 flex gap-3">
+        <div className="card flex gap-3 p-4">
           <input
             value={newName}
             onChange={e => setNewName(e.target.value)}
@@ -91,63 +89,71 @@ export default function WatchlistsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Watchlist list */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1">Your Watchlists</h3>
+          <h3 className="px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+            Your Watchlists
+          </h3>
           {isLoading ? (
-            Array(3).fill(0).map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)
+            Array(3).fill(0).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)
           ) : watchlists.length === 0 ? (
             <div className="card p-6 text-center">
-              <Star className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No watchlists yet</p>
-              <p className="text-xs text-gray-400 mt-1">Create one to start tracking stocks</p>
+              <Star className="mx-auto mb-2 h-10 w-10 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm text-slate-500">No watchlists yet</p>
+              <p className="mt-1 text-xs text-slate-400">Create one to start tracking stocks</p>
             </div>
           ) : (
-            watchlists.map(wl => (
-              <button
-                key={wl.id}
-                onClick={() => setSelectedWl(wl.id)}
-                className={`w-full text-left card p-4 hover:shadow-md transition-all ${selectedWl === wl.id ? 'ring-2 ring-primary-500' : ''}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">{wl.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{wl.symbols?.length ?? 0} symbols</p>
+            watchlists.map(wl => {
+              const isSelected = selectedWl === wl.id;
+              return (
+                <button
+                  key={wl.id}
+                  onClick={() => setSelectedWl(wl.id)}
+                  className={clsx(
+                    'card card-interactive w-full p-4 text-left transition-all',
+                    isSelected && 'ring-2 ring-cyan-400/60 ring-offset-2 ring-offset-transparent',
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-900 dark:text-white">{wl.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{wl.symbols?.length ?? 0} symbols</p>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteMutation.mutate(wl.id); }}
+                      className="p-1 text-slate-400 transition-colors hover:text-rose-500"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteMutation.mutate(wl.id); }}
-                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-                {wl.symbols?.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {wl.symbols.slice(0, 5).map(s => (
-                      <span key={s} className="badge badge-blue text-xs">{s}</span>
-                    ))}
-                    {wl.symbols.length > 5 && <span className="badge badge-gray text-xs">+{wl.symbols.length - 5}</span>}
-                  </div>
-                )}
-              </button>
-            ))
+                  {wl.symbols?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {wl.symbols.slice(0, 5).map(s => (
+                        <span key={s} className="badge badge-blue">{s}</span>
+                      ))}
+                      {wl.symbols.length > 5 && <span className="badge badge-gray">+{wl.symbols.length - 5}</span>}
+                    </div>
+                  )}
+                </button>
+              );
+            })
           )}
         </div>
 
         {/* Watchlist detail */}
         <div className="lg:col-span-2">
           {selectedWatchlist ? (
-            <div className="card p-5 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{selectedWatchlist.name}</h3>
+            <div className="card relative h-full overflow-hidden p-5">
+              <span className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{selectedWatchlist.name}</h3>
                 <span className="badge badge-gray">{selectedWatchlist.symbols?.length ?? 0} symbols</span>
               </div>
 
-              {/* Add symbol */}
-              <div className="flex gap-2 mb-4">
+              <div className="mb-4 flex gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <input
                     value={newSymbol}
                     onChange={e => setNewSymbol(e.target.value.toUpperCase())}
@@ -157,7 +163,7 @@ export default function WatchlistsPage() {
                       }
                     }}
                     placeholder="Add symbol (e.g. RELIANCE)"
-                    className="input pl-8 h-9 text-sm"
+                    className="input h-9 pl-8 text-sm"
                   />
                 </div>
                 <button
@@ -165,27 +171,29 @@ export default function WatchlistsPage() {
                   disabled={!newSymbol.trim()}
                   className="btn-primary btn-sm"
                 >
-                  <Plus className="w-4 h-4" /> Add
+                  <Plus className="h-4 w-4" /> Add
                 </button>
               </div>
 
-              {/* Symbols grid */}
               {selectedWatchlist.symbols?.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <div className="py-12 text-center text-slate-400">
+                  <Star className="mx-auto mb-3 h-12 w-12 opacity-30" />
                   <p>No symbols added yet</p>
-                  <p className="text-xs mt-1">Type a symbol above to add it</p>
+                  <p className="mt-1 text-xs">Type a symbol above to add it</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                   {selectedWatchlist.symbols.map(symbol => (
-                    <div key={symbol} className="flex items-center justify-between bg-gray-50 dark:bg-dark-700 rounded-lg px-3 py-2">
-                      <span className="font-semibold text-sm text-gray-900 dark:text-white">{symbol}</span>
+                    <div
+                      key={symbol}
+                      className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/30 px-3 py-2 backdrop-blur-md transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10 dark:bg-white/[0.03]"
+                    >
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">{symbol}</span>
                       <button
                         onClick={() => removeSymbolMutation.mutate({ id: selectedWl!, symbol })}
-                        className="text-gray-400 hover:text-red-500 ml-2"
+                        className="ml-2 text-slate-400 transition-colors hover:text-rose-500"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
@@ -193,9 +201,9 @@ export default function WatchlistsPage() {
               )}
             </div>
           ) : (
-            <div className="card p-12 text-center h-full flex flex-col items-center justify-center">
-              <Star className="w-16 h-16 text-gray-200 dark:text-gray-700 mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">Select a watchlist to manage symbols</p>
+            <div className="card flex h-full flex-col items-center justify-center p-12 text-center">
+              <Star className="mb-4 h-16 w-16 text-slate-200 dark:text-slate-700" />
+              <p className="text-slate-500 dark:text-slate-400">Select a watchlist to manage symbols</p>
             </div>
           )}
         </div>

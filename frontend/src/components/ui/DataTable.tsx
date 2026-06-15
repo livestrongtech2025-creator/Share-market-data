@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Search, Download } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -30,10 +30,14 @@ interface DataTableProps<T> {
 }
 
 function ChangeCell({ value }: { value: number }) {
-  if (value === null || value === undefined) return <span className="text-gray-400">—</span>;
+  if (value === null || value === undefined) return <span className="text-slate-400">—</span>;
   const positive = value >= 0;
   return (
-    <span className={clsx('font-semibold', positive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+    <span className={clsx(
+      'inline-flex items-center gap-0.5 font-mono font-semibold tabular-nums',
+      positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400',
+    )}>
+      <span aria-hidden>{positive ? '▲' : '▼'}</span>
       {positive ? '+' : ''}{Number(value).toFixed(2)}%
     </span>
   );
@@ -80,34 +84,39 @@ export default function DataTable<T extends Record<string, any>>({
   };
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card relative overflow-hidden">
+      {/* Top neon stripe */}
+      {title && <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />}
+
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-dark-700">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            {title && <h3 className="font-semibold text-gray-900 dark:text-white">{title}</h3>}
-            {description && <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>}
-          </div>
-          <div className="flex items-center gap-2">
-            {onSearchChange && (
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <input
-                  value={searchInput}
-                  onChange={e => handleSearch(e.target.value)}
-                  placeholder="Search..."
-                  className="input pl-8 h-8 text-xs w-44"
-                />
-              </div>
-            )}
-            {onExport && (
-              <button onClick={onExport} className="btn-secondary btn-sm">
-                <Download className="w-3.5 h-3.5" /> Export
-              </button>
-            )}
+      {(title || onSearchChange || onExport) && (
+        <div className="border-b border-white/[0.06] p-4 dark:border-white/[0.06]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              {title && <h3 className="font-bold text-slate-900 dark:text-white">{title}</h3>}
+              {description && <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>}
+            </div>
+            <div className="flex items-center gap-2">
+              {onSearchChange && (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    value={searchInput}
+                    onChange={e => handleSearch(e.target.value)}
+                    placeholder="Search..."
+                    className="input h-8 w-44 pl-8 text-xs"
+                  />
+                </div>
+              )}
+              {onExport && (
+                <button onClick={onExport} className="btn-secondary btn-sm">
+                  <Download className="h-3.5 w-3.5" /> Export
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -117,11 +126,16 @@ export default function DataTable<T extends Record<string, any>>({
               {columns.map(col => (
                 <th key={String(col.key)} className={col.className} style={col.width ? { width: col.width } : {}}>
                   {col.sortable ? (
-                    <button className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-white" onClick={() => handleSort(String(col.key))}>
+                    <button
+                      className="flex items-center gap-1 transition-colors hover:text-cyan-500 dark:hover:text-cyan-300"
+                      onClick={() => handleSort(String(col.key))}
+                    >
                       {col.header}
                       {sortKey === String(col.key) ? (
-                        sortOrder === 'ASC' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                      ) : <ChevronDown className="w-3 h-3 opacity-30" />}
+                        sortOrder === 'ASC'
+                          ? <ChevronUp className="h-3 w-3 text-cyan-500" />
+                          : <ChevronDown className="h-3 w-3 text-cyan-500" />
+                      ) : <ChevronDown className="h-3 w-3 opacity-30" />}
                     </button>
                   ) : col.header}
                 </th>
@@ -136,12 +150,21 @@ export default function DataTable<T extends Record<string, any>>({
                 </tr>
               ))
             ) : data.length === 0 ? (
-              <tr><td colSpan={columns.length} className="text-center py-12 text-gray-400 dark:text-gray-500">{emptyMessage}</td></tr>
+              <tr>
+                <td colSpan={columns.length} className="py-16 text-center">
+                  <div className="flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500">
+                    <Search className="h-8 w-8 opacity-30" />
+                    <p className="text-sm">{emptyMessage}</p>
+                  </div>
+                </td>
+              </tr>
             ) : (
               data.map((row, i) => (
                 <tr key={i}>
                   {columns.map(col => {
-                    const val = col.key.toString().includes('.') ? col.key.toString().split('.').reduce((o: any, k) => o?.[k], row) : row[col.key as keyof T];
+                    const val = col.key.toString().includes('.')
+                      ? col.key.toString().split('.').reduce((o: any, k) => o?.[k], row)
+                      : row[col.key as keyof T];
                     return <td key={String(col.key)} className={col.className}>{col.render ? col.render(val, row) : (val ?? '—')}</td>;
                   })}
                 </tr>
@@ -153,27 +176,50 @@ export default function DataTable<T extends Record<string, any>>({
 
       {/* Pagination */}
       {total > 0 && (
-        <div className="p-3 border-t border-gray-200 dark:border-dark-700 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <span>Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total.toLocaleString()}</span>
-            <select value={limit} onChange={e => onLimitChange?.(Number(e.target.value))} className="input h-7 text-xs w-16 py-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] p-3 dark:border-white/[0.06]">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-mono tabular-nums">
+              {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total.toLocaleString()}
+            </span>
+            <select
+              value={limit}
+              onChange={e => onLimitChange?.(Number(e.target.value))}
+              className="input h-7 w-16 py-0 text-xs"
+            >
               {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-1">
-            <button disabled={page <= 1} onClick={() => onPageChange?.(page - 1)} className="btn-ghost btn-sm p-1.5 disabled:opacity-30">
-              <ChevronLeft className="w-4 h-4" />
+            <button
+              disabled={page <= 1}
+              onClick={() => onPageChange?.(page - 1)}
+              className="btn-ghost btn-sm p-1.5 disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
             </button>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
               return (
-                <button key={p} onClick={() => onPageChange?.(p)} className={clsx('w-7 h-7 text-xs rounded-lg', p === page ? 'bg-primary-600 text-white' : 'btn-ghost')}>
+                <button
+                  key={p}
+                  onClick={() => onPageChange?.(p)}
+                  className={clsx(
+                    'h-7 w-7 rounded-lg font-mono text-xs font-semibold tabular-nums transition-all',
+                    p === page
+                      ? 'bg-gradient-to-br from-cyan-500 to-fuchsia-500 text-white shadow-glow-cyan'
+                      : 'text-slate-500 hover:bg-cyan-500/10 hover:text-cyan-500 dark:text-slate-400',
+                  )}
+                >
                   {p}
                 </button>
               );
             })}
-            <button disabled={page >= totalPages} onClick={() => onPageChange?.(page + 1)} className="btn-ghost btn-sm p-1.5 disabled:opacity-30">
-              <ChevronRight className="w-4 h-4" />
+            <button
+              disabled={page >= totalPages}
+              onClick={() => onPageChange?.(page + 1)}
+              className="btn-ghost btn-sm p-1.5 disabled:opacity-30"
+            >
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>

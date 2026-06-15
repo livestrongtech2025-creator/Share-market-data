@@ -12,6 +12,16 @@ const { wrapper } = require('axios-cookiejar-support');
 const { Client } = require('pg');
 const { parse } = require('csv-parse/sync');
 
+// ── Ingest mode: "live" | "bhav" | "all" (default) ───────────────────────────
+// "live": fetch only NSE live APIs (band hitters, volume gainers, most active).
+//         Should run shortly after market close (~15:45 IST) while NSE's live
+//         endpoints still serve today's session.
+// "bhav": fetch only the EOD bhav copy CSV. Should run after NSE publishes it
+//         (~19:00 IST onward).
+// "all":  legacy behaviour — fetch everything in one run.
+const MODE_RAW = (process.env.INGEST_MODE || 'all').toLowerCase();
+const MODE = ['live', 'bhav', 'all'].includes(MODE_RAW) ? MODE_RAW : 'all';
+
 // ── Date (IST timezone, or DATE_OVERRIDE env var for manual runs) ─────────────
 // Targets the most recently COMPLETED trading day in IST. This is resilient to
 // scheduler delays — a 20:00 IST cron that fires hours late (e.g. 03:00 IST
@@ -132,7 +142,7 @@ async function fetchBhavCopy() {
 }
 
 async function main() {
-  console.log(`\n=== NSE Daily Ingestion — ${TARGET_DATE} ===\n`);
+  console.log(`\n=== NSE Daily Ingestion — ${TARGET_DATE} (mode=${MODE}) ===\n`);
 
   const db = makeDbClient();
   await db.connect();
@@ -145,10 +155,12 @@ async function main() {
     return `${n.getUTCFullYear()}-${String(n.getUTCMonth()+1).padStart(2,'0')}-${String(n.getUTCDate()).padStart(2,'0')}`;
   })();
   const isToday = TARGET_DATE === todayIST;
+  const wantLive = (MODE === 'live' || MODE === 'all');
+  const wantBhav = (MODE === 'bhav' || MODE === 'all');
 
   let upperBand = [], lowerBand = [], volumeGainers = [], mostActive = [];
 
-  if (isToday) {
+  if (wantLive && isToday) {
     await initSession();
 
     console.log('Fetching band hitters...');
@@ -171,11 +183,14 @@ async function main() {
     mostActive = Array.isArray(maeRaw?.data) ? maeRaw.data : Array.isArray(maeRaw) ? maeRaw : [];
     console.log(`  ${mostActive.length} records\n`);
     await delay(4000);
+  } else if (wantLive && !isToday) {
+    console.log(`Skipping live APIs — TARGET_DATE (${TARGET_DATE}) is not today (${todayIST}). NSE serves live data only for the current session.\n`);
   } else {
-    console.log(`Backfill mode — skipping live APIs (NSE only serves today's data). Importing bhav copy only.\n`);
+    console.log(`Skipping live APIs (mode=${MODE}).\n`);
   }
 
-  const bhavCopy = await fetchBhavCopy();
+  const bhavCopy = wantBhav ? await fetchBhavCopy() : [];
+  if (!wantBhav) console.log(`Skipping bhav copy (mode=${MODE}).`);
   console.log('');
 
   await db.query('BEGIN');
@@ -298,8 +313,13 @@ async function main() {
   console.log(`  TOTAL              : ${total}`);
   console.log(`  Date               : ${TARGET_DATE}`);
 
-  if (total === 0) {
-    console.error('\nNo records inserted — check NSE API availability or if today is a market holiday.');
+  // Only fail when the data we *expected* (per MODE) didn't arrive.
+  const liveExpected = wantLive && isToday;
+  const liveCount    = ubhCount + lbhCount + vgCount + maeCount;
+  const liveFailed   = liveExpected && liveCount === 0;
+  const bhavFailed   = wantBhav   && bhavCount  === 0;
+  if (liveFailed || bhavFailed) {
+    console.error(`\nNo records inserted for expected source(s). liveFailed=${liveFailed} bhavFailed=${bhavFailed}. Check NSE availability or if ${TARGET_DATE} was a market holiday.`);
     process.exit(1);
   }
 

@@ -2,27 +2,28 @@
 import { useState, useCallback } from 'react';
 import DataTable, { PriceChange, formatVolume } from '@/components/ui/DataTable';
 import MarketFilter, { EMPTY_MARKET_FILTERS, buildMarketParams, type MarketFilters } from '@/components/ui/MarketFilter';
+import PageHeader from '@/components/layout/PageHeader';
 import { useLowerBandHitters } from '@/hooks/useMarketData';
 import { marketApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { TrendingDown } from 'lucide-react';
 
 const COLUMNS = [
-  { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold text-gray-900 dark:text-white tracking-wide">{v || '—'}</span> },
-  { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">{v}</span> : '—' },
-  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold">₹{Number(v).toFixed(2)}</span> : '—' },
-  { key: 'openPrice', header: 'Open (₹)', sortable: true, render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—' },
-  { key: 'highPrice', header: 'High (₹)', sortable: true, render: (v: any) => v != null ? <span className="text-green-600 dark:text-green-400 font-mono">₹{Number(v).toFixed(2)}</span> : '—' },
-  { key: 'lowPrice', header: 'Low (₹)', sortable: true, render: (v: any) => v != null ? <span className="text-red-500 dark:text-red-400 font-mono">₹{Number(v).toFixed(2)}</span> : '—' },
-  { key: 'prevClose', header: 'Prev Close', sortable: true, render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—' },
-  { key: 'chng', header: 'Chng (₹)', sortable: true, render: (v: any) => { if (v == null) return '—'; const n = Number(v); return <span className={n >= 0 ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>{n >= 0 ? '+' : ''}₹{n.toFixed(2)}</span>; } },
+  { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold tracking-wide text-slate-900 dark:text-white">{v || '—'}</span> },
+  { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="badge badge-red">{v}</span> : '—' },
+  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'openPrice', header: 'Open (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'highPrice', header: 'High (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'lowPrice', header: 'Low (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-rose-500 dark:text-rose-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'prevClose', header: 'Prev Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'chng', header: 'Chng (₹)', sortable: true, render: (v: any) => { if (v == null) return '—'; const n = Number(v); return <span className={`font-mono font-semibold tabular-nums ${n >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>{n >= 0 ? '+' : ''}₹{n.toFixed(2)}</span>; } },
   { key: 'pctChng', header: '%Chng', sortable: true, render: (v: any) => <PriceChange value={v} /> },
-  { key: 'lowerBand', header: 'Lower Band', sortable: true, render: (v: any) => v != null ? <span className="font-mono text-red-600 dark:text-red-400 font-semibold">₹{Number(v).toFixed(2)}</span> : '—' },
-  { key: 'volume', header: 'Volume', sortable: true, render: (v: any) => formatVolume(v) },
+  { key: 'lowerBand', header: 'Lower Band', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums text-rose-500 dark:text-rose-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'volume', header: 'Volume', sortable: true, render: (v: any) => <span className="font-mono tabular-nums">{formatVolume(v)}</span> },
   { key: 'value', header: 'Value (₹ Cr)', sortable: true, render: (v: any) => { const r = Number(v); if (!v || r === 0) return '—'; if (r >= 1e9) return `₹${(r/1e9).toFixed(2)}K Cr`; if (r >= 1e7) return `₹${(r/1e7).toFixed(2)} Cr`; if (r >= 1e5) return `₹${(r/1e5).toFixed(2)} L`; return `₹${r.toFixed(2)}`; } },
-  { key: 'week52High', header: '52W High', sortable: true, render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—' },
-  { key: 'week52Low', header: '52W Low', sortable: true, render: (v: any) => v != null ? `₹${Number(v).toFixed(2)}` : '—' },
-  { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+  { key: 'week52High', header: '52W High', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'week52Low', header: '52W Low', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? <span className="font-mono text-xs tabular-nums">{new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span> : '—' },
 ];
 
 export default function LowerBandPage() {
@@ -53,11 +54,13 @@ export default function LowerBandPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center"><TrendingDown className="w-5 h-5 text-white" /></div>
-        <div><h1 className="text-2xl font-bold text-gray-900 dark:text-white">Lower Band Hitters</h1><p className="text-sm text-gray-500">Stocks hitting lower circuit breaker</p></div>
-      </div>
+    <div className="animate-fade-in space-y-6">
+      <PageHeader
+        icon={TrendingDown}
+        title="Lower Band Hitters"
+        description="Stocks hitting lower circuit breaker"
+        accent="rose"
+      />
       <MarketFilter filters={filters} onChange={handleFilter} onClear={() => { setFilters(EMPTY_MARKET_FILTERS); setPage(1); }} />
       <DataTable columns={COLUMNS as any} data={data?.data ?? []} total={data?.total ?? 0}
         page={page} limit={limit} loading={isLoading}

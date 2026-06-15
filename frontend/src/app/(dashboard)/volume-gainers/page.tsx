@@ -2,21 +2,19 @@
 import { useState, useCallback } from 'react';
 import DataTable, { PriceChange, formatVolume } from '@/components/ui/DataTable';
 import MarketFilter, { EMPTY_MARKET_FILTERS, buildMarketParams, type MarketFilters } from '@/components/ui/MarketFilter';
+import PageHeader from '@/components/layout/PageHeader';
 import { useVolumeGainers } from '@/hooks/useMarketData';
 import { marketApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { BarChart2 } from 'lucide-react';
 
-// NSE /api/live-analysis-volume-gainers only provides ltp, pChange, volume,
-// turnover, week1AvgVolume, week1volChange — OHLC and prevClose are not in
-// this endpoint, so those columns are excluded.
 const COLUMNS = [
-  { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold text-gray-900 dark:text-white tracking-wide">{v || '—'}</span> },
-  { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">{v}</span> : '—' },
-  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold tracking-wide text-slate-900 dark:text-white">{v || '—'}</span> },
+  { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="badge badge-blue">{v}</span> : '—' },
+  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
   { key: 'pctChng', header: '% Chng', sortable: true, render: (v: any) => <PriceChange value={v} /> },
-  { key: 'volume', header: 'Volume', sortable: true, render: (v: any) => <span className="font-semibold text-blue-600 dark:text-blue-400">{formatVolume(v)}</span> },
-  { key: 'prevVolume', header: '1W Avg Vol', sortable: true, render: (v: any) => formatVolume(v) },
+  { key: 'volume', header: 'Volume', sortable: true, render: (v: any) => <span className="font-mono font-semibold tabular-nums text-cyan-600 dark:text-cyan-300">{formatVolume(v)}</span> },
+  { key: 'prevVolume', header: '1W Avg Vol', sortable: true, render: (v: any) => <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatVolume(v)}</span> },
   {
     key: 'volumeRatio',
     header: 'Vol Surge',
@@ -24,12 +22,12 @@ const COLUMNS = [
     render: (v: any) => {
       if (!v) return '—';
       const n = Number(v);
-      const color = n >= 5 ? 'text-red-600 dark:text-red-400' : n >= 2 ? 'text-orange-600 dark:text-orange-400' : 'text-blue-600 dark:text-blue-400';
-      return <span className={`font-bold ${color}`}>{n.toFixed(2)}x</span>;
+      const color = n >= 5 ? 'text-rose-500 dark:text-rose-400' : n >= 2 ? 'text-amber-500 dark:text-amber-400' : 'text-cyan-600 dark:text-cyan-300';
+      return <span className={`font-mono font-extrabold tabular-nums ${color}`}>{n.toFixed(2)}×</span>;
     },
   },
   { key: 'value', header: 'Turnover (₹ Cr)', sortable: true, render: (v: any) => { const r = Number(v); if (!v || r === 0) return '—'; if (r >= 1e9) return `₹${(r/1e9).toFixed(2)}K Cr`; if (r >= 1e7) return `₹${(r/1e7).toFixed(2)} Cr`; if (r >= 1e5) return `₹${(r/1e5).toFixed(2)} L`; return `₹${r.toFixed(2)}`; } },
-  { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+  { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? <span className="font-mono text-xs tabular-nums">{new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span> : '—' },
 ];
 
 export default function VolumeGainersPage() {
@@ -60,11 +58,13 @@ export default function VolumeGainersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center"><BarChart2 className="w-5 h-5 text-white" /></div>
-        <div><h1 className="text-2xl font-bold text-gray-900 dark:text-white">Volume Gainers</h1><p className="text-sm text-gray-500">Stocks with unusual volume surge</p></div>
-      </div>
+    <div className="animate-fade-in space-y-6">
+      <PageHeader
+        icon={BarChart2}
+        title="Volume Gainers"
+        description="Stocks with unusual volume surge"
+        accent="blue"
+      />
       <MarketFilter filters={filters} onChange={handleFilter} onClear={() => { setFilters(EMPTY_MARKET_FILTERS); setPage(1); }} />
       <DataTable columns={COLUMNS as any} data={data?.data ?? []} total={data?.total ?? 0}
         page={page} limit={limit} loading={isLoading}

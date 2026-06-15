@@ -1,16 +1,26 @@
-name: Daily NSE Ingestion
+name: Daily NSE Ingestion (manual)
 
+# NOTE: scheduled cron removed. GitHub Actions scheduled workflows routinely
+# delay 7–9h under load, and by the time they fire post-midnight IST the NSE
+# live APIs no longer serve "yesterday's" session — losing UBH/LBH/VG/MAE data.
+# Production scheduling now lives in render.yaml (two crons: live + bhav).
+# This workflow is kept ONLY for manual backfills via the Actions UI.
 on:
-  schedule:
-    # 14:30 UTC = 20:00 IST, Mon-Fri (after NSE publishes bhav copy ~19:00 IST)
-    - cron: "30 14 * * 1-5"
-  # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
     inputs:
       date_override:
         description: "Optional: run for a specific date (YYYY-MM-DD). Leave blank for today."
         required: false
         default: ""
+      ingest_mode:
+        description: "Which sources to fetch: all / live / bhav"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - live
+          - bhav
 
 jobs:
   ingest:
@@ -39,4 +49,5 @@ jobs:
           DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
           POSTGRES_SSL: "true"
           DATE_OVERRIDE: ${{ github.event.inputs.date_override }}
+          INGEST_MODE: ${{ github.event.inputs.ingest_mode }}
         run: node scripts/ingest-today.js

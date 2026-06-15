@@ -40,16 +40,15 @@ function countActive(f: MarketFilters) {
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-300">
       {label}
-      <button onClick={onRemove} className="hover:opacity-70"><X className="w-3 h-3" /></button>
+      <button onClick={onRemove} className="transition-colors hover:text-rose-500"><X className="h-3 w-3" /></button>
     </span>
   );
 }
 
 export default function MarketFilter({
   filters, onChange, onClear,
-  accent = 'indigo',
   showPriceFilter = true,
   showVolumeFilter = true,
 }: Props) {
@@ -57,37 +56,46 @@ export default function MarketFilter({
   const active = countActive(filters);
 
   return (
-    <div className="card">
+    <div className="card overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-dark-700 flex items-center justify-between">
-        <button onClick={() => setOpen(v => !v)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-          <Filter className="w-4 h-4" />
+      <div className="flex items-center justify-between border-b border-white/[0.06] p-4 dark:border-white/[0.06]">
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-700 transition-colors hover:text-cyan-500 dark:text-slate-200 dark:hover:text-cyan-300"
+        >
+          <Filter className="h-4 w-4" />
           Filters
           {active > 0 && (
-            <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-indigo-500 text-white">{active}</span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-fuchsia-500 text-[10px] font-bold text-white shadow-glow-cyan">
+              {active}
+            </span>
           )}
-          {open ? <ChevronUp className="w-4 h-4 opacity-50" /> : <ChevronDown className="w-4 h-4 opacity-50" />}
+          {open ? <ChevronUp className="h-4 w-4 opacity-50" /> : <ChevronDown className="h-4 w-4 opacity-50" />}
         </button>
         {active > 0 && (
-          <button onClick={onClear} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:text-red-400 font-medium">
-            <X className="w-3.5 h-3.5" /> Clear All
+          <button
+            onClick={onClear}
+            className="flex items-center gap-1 text-xs font-semibold text-rose-500 transition-colors hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300"
+          >
+            <X className="h-3.5 w-3.5" /> Clear All
           </button>
         )}
       </div>
 
       {open && (
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4">
           {/* Row 1: Date + Series */}
           <div className="flex flex-wrap items-end gap-3">
-            {/* Date mode toggle */}
-            <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-dark-600 text-xs font-medium">
+            <div className="flex overflow-hidden rounded-xl border border-white/10 text-xs font-semibold dark:border-white/10">
               {(['single', 'range'] as const).map(m => (
-                <button key={m} onClick={() => onChange('dateMode', m)}
-                  className={clsx('px-3 py-1.5 transition-colors capitalize',
+                <button
+                  key={m}
+                  onClick={() => onChange('dateMode', m)}
+                  className={clsx('px-3 py-1.5 capitalize transition-all',
                     filters.dateMode === m
-                      ? 'bg-indigo-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-700')}>
+                      ? 'bg-gradient-to-br from-cyan-500 to-violet-500 text-white shadow-glow-cyan'
+                      : 'text-slate-600 hover:bg-cyan-500/10 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300')}
+                >
                   {m === 'single' ? 'Single Date' : 'Date Range'}
                 </button>
               ))}
@@ -95,27 +103,26 @@ export default function MarketFilter({
 
             {filters.dateMode === 'single' ? (
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-500">Date</label>
-                <input type="date" value={filters.date} onChange={e => onChange('date', e.target.value)} className="input h-9 text-sm w-40" />
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</label>
+                <input type="date" value={filters.date} onChange={e => onChange('date', e.target.value)} className="input h-9 w-40 text-sm" />
               </div>
             ) : (
               <>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500">From</label>
-                  <input type="date" value={filters.startDate} onChange={e => onChange('startDate', e.target.value)} className="input h-9 text-sm w-40" />
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">From</label>
+                  <input type="date" value={filters.startDate} onChange={e => onChange('startDate', e.target.value)} className="input h-9 w-40 text-sm" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500">To</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">To</label>
                   <input type="date" value={filters.endDate} min={filters.startDate || undefined}
-                    onChange={e => onChange('endDate', e.target.value)} className="input h-9 text-sm w-40" />
+                    onChange={e => onChange('endDate', e.target.value)} className="input h-9 w-40 text-sm" />
                 </div>
               </>
             )}
 
-            {/* Series */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500">Series</label>
-              <select value={filters.series} onChange={e => onChange('series', e.target.value)} className="input h-9 text-sm w-28">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Series</label>
+              <select value={filters.series} onChange={e => onChange('series', e.target.value)} className="input h-9 w-28 text-sm">
                 <option value="">All</option>
                 {NSE_SERIES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -127,32 +134,31 @@ export default function MarketFilter({
             <div className="flex flex-wrap items-end gap-3">
               {showPriceFilter && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500">LTP / Price (₹)</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">LTP / Price (₹)</label>
                   <div className="flex items-center gap-1.5">
                     <input type="number" min="0" step="0.01" placeholder="Min" value={filters.minLtp}
-                      onChange={e => onChange('minLtp', e.target.value)} className="input h-9 text-sm w-24" />
-                    <span className="text-gray-400 text-sm">–</span>
+                      onChange={e => onChange('minLtp', e.target.value)} className="input h-9 w-24 text-sm" />
+                    <span className="text-sm text-slate-400">–</span>
                     <input type="number" min="0" step="0.01" placeholder="Max" value={filters.maxLtp}
-                      onChange={e => onChange('maxLtp', e.target.value)} className="input h-9 text-sm w-24" />
+                      onChange={e => onChange('maxLtp', e.target.value)} className="input h-9 w-24 text-sm" />
                   </div>
                 </div>
               )}
               {showVolumeFilter && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500">Volume (Qty)</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Volume (Qty)</label>
                   <div className="flex items-center gap-1.5">
                     <input type="number" min="0" placeholder="Min" value={filters.minVolume}
-                      onChange={e => onChange('minVolume', e.target.value)} className="input h-9 text-sm w-28" />
-                    <span className="text-gray-400 text-sm">–</span>
+                      onChange={e => onChange('minVolume', e.target.value)} className="input h-9 w-28 text-sm" />
+                    <span className="text-sm text-slate-400">–</span>
                     <input type="number" min="0" placeholder="Max" value={filters.maxVolume}
-                      onChange={e => onChange('maxVolume', e.target.value)} className="input h-9 text-sm w-28" />
+                      onChange={e => onChange('maxVolume', e.target.value)} className="input h-9 w-28 text-sm" />
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Active chips */}
           {active > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               {filters.dateMode === 'single' && filters.date && <Chip label={`Date: ${filters.date}`} onRemove={() => onChange('date', '')} />}

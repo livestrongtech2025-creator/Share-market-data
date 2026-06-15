@@ -114,17 +114,41 @@ services:
       - key: SLACK_WEBHOOK_URL
         sync: false
 
-  # ── NSE Daily Ingestion Cron Job ─────────────────────────────────────────────
-  # Runs at 20:00 IST (14:30 UTC) every weekday — after NSE publishes the bhav
-  # copy (~19:00 IST). Independent of the web service sleep state.
+  # ── NSE Live-API Ingestion Cron (band hitters / VG / MAE) ────────────────────
+  # Runs at 15:45 IST (10:15 UTC) every weekday — right after market close so
+  # NSE's live endpoints still serve today's session. These endpoints DO NOT
+  # serve historical days, so missing this window means losing the data.
   - type: cron
-    name: nse-daily-ingestion
+    name: nse-live-ingestion
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    schedule: "15 10 * * 1-5"
+    startCommand: node scripts/ingest-today.js
+    envVars:
+      - key: INGEST_MODE
+        value: live
+      - key: DATABASE_URL
+        sync: false
+      - key: POSTGRES_SSL
+        value: "true"
+      - key: NODE_ENV
+        value: production
+
+  # ── NSE Bhav Copy Ingestion Cron (EOD CSV) ───────────────────────────────────
+  # Runs at 20:00 IST (14:30 UTC) every weekday — after NSE publishes the bhav
+  # copy file (~19:00 IST). Unlike live APIs, the bhav copy CSV is always
+  # archived, so this can also recover from a delayed run via DATE_OVERRIDE.
+  - type: cron
+    name: nse-bhav-ingestion
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     schedule: "30 14 * * 1-5"
     startCommand: node scripts/ingest-today.js
     envVars:
+      - key: INGEST_MODE
+        value: bhav
       - key: DATABASE_URL
         sync: false
       - key: POSTGRES_SSL

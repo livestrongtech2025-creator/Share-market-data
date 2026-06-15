@@ -3,15 +3,15 @@ import { useAiMarketSummary, useMarketBreadth } from '@/hooks/useMarketData';
 import SentimentBadge from '@/components/ui/SentimentBadge';
 import FearGreedGauge from '@/components/charts/FearGreedGauge';
 import { format } from 'date-fns';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Sparkles } from 'lucide-react';
 
 export default function MarketSummaryCard() {
   const { data: summary, isLoading } = useAiMarketSummary();
   const { data: breadth } = useMarketBreadth();
 
   if (isLoading) return (
-    <div className="card p-5 col-span-full">
-      <div className="skeleton h-6 w-48 mb-4" />
+    <div className="card col-span-full p-5">
+      <div className="skeleton mb-4 h-6 w-48" />
       <div className="skeleton h-24 w-full" />
     </div>
   );
@@ -21,20 +21,27 @@ export default function MarketSummaryCard() {
   const advance = breadth?.advance ?? summary?.breadthAdvance ?? 0;
   const decline = breadth?.decline ?? summary?.breadthDecline ?? 0;
   const unchanged = breadth?.unchanged ?? summary?.breadthUnchanged ?? 0;
+  const total = advance + decline + unchanged;
 
   return (
-    <div className="card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className="card relative overflow-hidden p-5">
+      <span className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" />
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white text-lg">Market Overview</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+            Market Pulse
+          </h3>
           {summary?.marketDate && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">{format(new Date(summary.marketDate), 'dd MMM yyyy')}</p>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              {format(new Date(summary.marketDate), 'EEEE, dd MMM yyyy')}
+            </p>
           )}
         </div>
         <SentimentBadge sentiment={sentiment} score={Math.round(fearGreed)} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {/* Fear/Greed Gauge */}
         <div className="flex justify-center">
           <FearGreedGauge score={Math.round(fearGreed)} sentiment={sentiment} />
@@ -42,32 +49,40 @@ export default function MarketSummaryCard() {
 
         {/* Breadth */}
         <div className="flex flex-col justify-center gap-3">
-          <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Market Breadth</h4>
+          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Market Breadth
+          </h4>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400"><TrendingUp className="w-3.5 h-3.5" /> Advances</span>
-              <span className="font-semibold text-green-600 dark:text-green-400">{advance}</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                <TrendingUp className="h-3.5 w-3.5" strokeWidth={2.4} /> Advances
+              </span>
+              <span className="font-mono font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{advance}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400"><TrendingDown className="w-3.5 h-3.5" /> Declines</span>
-              <span className="font-semibold text-red-600 dark:text-red-400">{decline}</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-rose-500 dark:text-rose-400">
+                <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.4} /> Declines
+              </span>
+              <span className="font-mono font-bold tabular-nums text-rose-500 dark:text-rose-400">{decline}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"><Minus className="w-3.5 h-3.5" /> Unchanged</span>
-              <span className="font-semibold text-gray-500 dark:text-gray-400">{unchanged}</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">
+                <Minus className="h-3.5 w-3.5" strokeWidth={2.4} /> Unchanged
+              </span>
+              <span className="font-mono font-bold tabular-nums text-slate-500 dark:text-slate-400">{unchanged}</span>
             </div>
           </div>
-          {(advance + decline) > 0 && (
+          {total > 0 && (
             <div className="mt-1">
-              <div className="h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
-                <div className="h-full flex">
-                  <div className="bg-green-500" style={{ width: `${(advance / (advance + decline + unchanged)) * 100}%` }} />
-                  <div className="bg-red-500" style={{ width: `${(decline / (advance + decline + unchanged)) * 100}%` }} />
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200/50 dark:bg-white/[0.06]">
+                <div className="flex h-full">
+                  <div className="bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-500" style={{ width: `${(advance / total) * 100}%` }} />
+                  <div className="bg-gradient-to-r from-rose-500 to-pink-500 transition-all duration-500" style={{ width: `${(decline / total) * 100}%` }} />
                 </div>
               </div>
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>{Math.round((advance / (advance + decline + unchanged)) * 100)}% adv</span>
-                <span>{Math.round((decline / (advance + decline + unchanged)) * 100)}% dec</span>
+              <div className="mt-1 flex justify-between font-mono text-[10px] tabular-nums text-slate-400">
+                <span>{Math.round((advance / total) * 100)}% adv</span>
+                <span>{Math.round((decline / total) * 100)}% dec</span>
               </div>
             </div>
           )}
@@ -75,12 +90,15 @@ export default function MarketSummaryCard() {
 
         {/* AI Summary */}
         <div className="flex flex-col justify-center">
-          <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">AI Analysis</h4>
-          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-5">
+          <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <Sparkles className="h-3 w-3 text-cyan-400" />
+            AI Analysis
+          </h4>
+          <p className="line-clamp-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
             {summary?.generatedSummary || 'No AI summary available. Run data ingestion to generate insights.'}
           </p>
           {summary?.generatedSummary && (
-            <p className="text-xs text-gray-400 italic mt-2">Not financial advice.</p>
+            <p className="mt-2 text-[11px] italic text-slate-400">Not financial advice.</p>
           )}
         </div>
       </div>
