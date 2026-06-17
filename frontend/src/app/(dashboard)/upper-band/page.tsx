@@ -61,12 +61,20 @@ export default function UpperBandPage() {
         description="Stocks hitting upper circuit breaker"
         accent="emerald"
       />
-      <MarketFilter filters={filters} onChange={handleFilter} onClear={() => { setFilters(EMPTY_MARKET_FILTERS); setPage(1); }} />
+      <MarketFilter
+        filters={filters}
+        onChange={handleFilter}
+        onClear={() => { setFilters(EMPTY_MARKET_FILTERS); setSearch(''); setPage(1); }}
+        showSeriesFilter={false}
+        showPriceFilter={false}
+        showVolumeFilter={false}
+        search={search}
+        onSearchChange={v => { setSearch(v); setPage(1); }}
+      />
       <DataTable columns={COLUMNS as any} data={data?.data ?? []} total={data?.total ?? 0}
         page={page} limit={limit} loading={isLoading}
         onPageChange={setPage} onLimitChange={l => { setLimit(l); setPage(1); }}
         onSortChange={(k, o) => { setSortBy(k); setSortOrder(o); }}
-        onSearchChange={v => { setSearch(v); setPage(1); }}
         onExport={handleExport}
         title="Upper Band Hitters" description={`${(data?.total ?? 0).toLocaleString('en-IN')} stocks`} />
     </div>

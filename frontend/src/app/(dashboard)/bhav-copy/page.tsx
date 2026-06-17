@@ -1,11 +1,11 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DataTable, { formatVolume } from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
 import { useBhavCopy, useBhavCopySeries } from '@/hooks/useMarketData';
 import { marketApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Database, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Database, Filter, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import clsx from 'clsx';
 
 interface Filters {
@@ -14,15 +14,10 @@ interface Filters {
   startDate: string;
   endDate: string;
   series: string;
-  minClose: string;
-  maxClose: string;
-  minVolume: string;
-  maxVolume: string;
 }
 
 const EMPTY_FILTERS: Filters = {
-  dateMode: 'single', date: '', startDate: '', endDate: '',
-  series: '', minClose: '', maxClose: '', minVolume: '', maxVolume: '',
+  dateMode: 'single', date: '', startDate: '', endDate: '', series: '',
 };
 
 function buildQueryParams(filters: Filters, page: number, limit: number, search: string) {
@@ -34,17 +29,13 @@ function buildQueryParams(filters: Filters, page: number, limit: number, search:
     p.endDate = filters.endDate;
   }
   if (filters.series) p.series = filters.series;
-  if (filters.minClose !== '')  p.minClose  = Number(filters.minClose);
-  if (filters.maxClose !== '')  p.maxClose  = Number(filters.maxClose);
-  if (filters.minVolume !== '') p.minVolume = Number(filters.minVolume);
-  if (filters.maxVolume !== '') p.maxVolume = Number(filters.maxVolume);
   return p;
 }
 
-function countActiveFilters(f: Filters): number {
+function countActiveFilters(f: Filters, search: string): number {
   return [
     f.dateMode === 'single' ? f.date : (f.startDate || f.endDate),
-    f.series, f.minClose, f.maxClose, f.minVolume, f.maxVolume,
+    f.series, search,
   ].filter(Boolean).length;
 }
 
@@ -62,6 +53,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 export default function BhavCopyPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('sourceDate');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
@@ -77,8 +69,15 @@ export default function BhavCopyPage() {
     setPage(1);
   }, []);
 
+  useEffect(() => {
+    if (searchInput === search) return;
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput, search]);
+
   const clearFilters = useCallback(() => {
     setFilters(EMPTY_FILTERS);
+    setSearchInput('');
     setSearch('');
     setPage(1);
   }, []);
@@ -96,7 +95,7 @@ export default function BhavCopyPage() {
     } catch { toast.error('Export failed'); }
   };
 
-  const activeCount = countActiveFilters(filters);
+  const activeCount = countActiveFilters(filters, search);
 
   const columns = [
     { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold tracking-wide text-slate-900 dark:text-white">{v || '—'}</span> },
@@ -206,24 +205,17 @@ export default function BhavCopyPage() {
                   {(seriesList ?? []).map(s => (<option key={s} value={s}>{s}</option>))}
                 </select>
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Close Price (₹)</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="number" min="0" step="0.01" placeholder="Min" value={filters.minClose} onChange={e => setFilter('minClose', e.target.value)} className="input h-9 w-24 text-sm" />
-                  <span className="text-sm text-slate-400">–</span>
-                  <input type="number" min="0" step="0.01" placeholder="Max" value={filters.maxClose} onChange={e => setFilter('maxClose', e.target.value)} className="input h-9 w-24 text-sm" />
-                </div>
-              </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Volume (Qty)</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="number" min="0" placeholder="Min" value={filters.minVolume} onChange={e => setFilter('minVolume', e.target.value)} className="input h-9 w-28 text-sm" />
-                  <span className="text-sm text-slate-400">–</span>
-                  <input type="number" min="0" placeholder="Max" value={filters.maxVolume} onChange={e => setFilter('maxVolume', e.target.value)} className="input h-9 w-28 text-sm" />
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    value={searchInput}
+                    onChange={e => setSearchInput(e.target.value)}
+                    placeholder="Symbol..."
+                    className="input h-9 w-48 pl-8 text-sm"
+                  />
                 </div>
               </div>
             </div>
@@ -234,10 +226,7 @@ export default function BhavCopyPage() {
                 {filters.dateMode === 'range' && filters.startDate && <FilterChip label={`From: ${filters.startDate}`} onRemove={() => setFilter('startDate', '')} />}
                 {filters.dateMode === 'range' && filters.endDate && <FilterChip label={`To: ${filters.endDate}`} onRemove={() => setFilter('endDate', '')} />}
                 {filters.series && <FilterChip label={`Series: ${filters.series}`} onRemove={() => setFilter('series', '')} />}
-                {filters.minClose && <FilterChip label={`Close ≥ ₹${filters.minClose}`} onRemove={() => setFilter('minClose', '')} />}
-                {filters.maxClose && <FilterChip label={`Close ≤ ₹${filters.maxClose}`} onRemove={() => setFilter('maxClose', '')} />}
-                {filters.minVolume && <FilterChip label={`Volume ≥ ${Number(filters.minVolume).toLocaleString()}`} onRemove={() => setFilter('minVolume', '')} />}
-                {filters.maxVolume && <FilterChip label={`Volume ≤ ${Number(filters.maxVolume).toLocaleString()}`} onRemove={() => setFilter('maxVolume', '')} />}
+                {search && <FilterChip label={`Search: ${search}`} onRemove={() => { setSearchInput(''); setSearch(''); setPage(1); }} />}
               </div>
             )}
           </div>
@@ -254,7 +243,6 @@ export default function BhavCopyPage() {
         onPageChange={setPage}
         onLimitChange={l => { setLimit(l); setPage(1); }}
         onSortChange={(k, o) => { setSortBy(k); setSortOrder(o); }}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
         onExport={handleExport}
         title="Bhav Copy"
         description={`${(data?.total ?? 0).toLocaleString('en-IN')} records`}

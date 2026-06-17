@@ -1,6 +1,6 @@
 'use client';
-import { Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+import { Filter, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 
 export interface MarketFilters {
@@ -29,6 +29,9 @@ interface Props {
   accent?: string;
   showPriceFilter?: boolean;
   showVolumeFilter?: boolean;
+  showSeriesFilter?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 function countActive(f: MarketFilters) {
@@ -51,9 +54,25 @@ export default function MarketFilter({
   filters, onChange, onClear,
   showPriceFilter = true,
   showVolumeFilter = true,
+  showSeriesFilter = true,
+  search,
+  onSearchChange,
 }: Props) {
   const [open, setOpen] = useState(true);
+  const [searchInput, setSearchInput] = useState(search ?? '');
   const active = countActive(filters);
+
+  useEffect(() => {
+    if (search !== undefined && search !== searchInput) setSearchInput(search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  useEffect(() => {
+    if (!onSearchChange) return;
+    if (searchInput === (search ?? '')) return;
+    const t = setTimeout(() => onSearchChange(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput, onSearchChange, search]);
 
   return (
     <div className="card overflow-hidden">
@@ -120,13 +139,30 @@ export default function MarketFilter({
               </>
             )}
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Series</label>
-              <select value={filters.series} onChange={e => onChange('series', e.target.value)} className="input h-9 w-28 text-sm">
-                <option value="">All</option>
-                {NSE_SERIES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+            {showSeriesFilter && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Series</label>
+                <select value={filters.series} onChange={e => onChange('series', e.target.value)} className="input h-9 w-28 text-sm">
+                  <option value="">All</option>
+                  {NSE_SERIES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+
+            {onSearchChange && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    value={searchInput}
+                    onChange={e => setSearchInput(e.target.value)}
+                    placeholder="Symbol..."
+                    className="input h-9 w-48 pl-8 text-sm"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Row 2: Price + Volume */}
