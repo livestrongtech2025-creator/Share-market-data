@@ -1,10 +1,10 @@
-name: Daily NSE Ingestion (manual)
+name: Daily NSE Ingestion
 
-# NOTE: scheduled cron removed. GitHub Actions scheduled workflows routinely
-# delay 7–9h under load, and by the time they fire post-midnight IST the NSE
-# live APIs no longer serve "yesterday's" session — losing UBH/LBH/VG/MAE data.
-# Production scheduling now lives in render.yaml (two crons: live + bhav).
-# This workflow is kept ONLY for manual backfills via the Actions UI.
+# Primary scheduling lives in render.yaml (two crons: live + bhav). GitHub Actions
+# schedules are kept here as a BACKUP — they routinely delay 7–9h under load, so
+# they may miss the NSE live-API window (which only serves the current session).
+# The bhav copy is archived and always recoverable, so the backup is reliable
+# for that source even when delayed.
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +21,11 @@ on:
           - all
           - live
           - bhav
+  schedule:
+    # 15:45 IST (10:15 UTC) — mirror nse-live-ingestion cron in render.yaml
+    - cron: "15 10 * * 1-5"
+    # 20:00 IST (14:30 UTC) — mirror nse-bhav-ingestion cron in render.yaml
+    - cron: "30 14 * * 1-5"
 
 jobs:
   ingest:
@@ -43,11 +48,24 @@ jobs:
         working-directory: backend
         run: npm ci --omit=dev
 
+      - name: Resolve ingest mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            case "${{ github.event.schedule }}" in
+              "15 10 * * 1-5") echo "mode=live" >> "$GITHUB_OUTPUT" ;;
+              "30 14 * * 1-5") echo "mode=bhav" >> "$GITHUB_OUTPUT" ;;
+              *)               echo "mode=all"  >> "$GITHUB_OUTPUT" ;;
+            esac
+          else
+            echo "mode=${{ github.event.inputs.ingest_mode || 'all' }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run ingestion
         working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
           POSTGRES_SSL: "true"
           DATE_OVERRIDE: ${{ github.event.inputs.date_override }}
-          INGEST_MODE: ${{ github.event.inputs.ingest_mode }}
+          INGEST_MODE: ${{ steps.mode.outputs.mode }}
         run: node scripts/ingest-today.js

@@ -14,7 +14,7 @@ const { Client } = require('pg');
 const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
 
-const DATES = ['2026-06-05', '2026-06-08', '2026-06-09'];
+const DATES = ['2026-06-15', '2026-06-16'];
 
 const RENDER_URL = 'postgresql://sharemarket_likd_user:6ZAdZ0KtM3pbT4cr61jQ51Q5gTiiLnQG@dpg-d8aimsul51nc73dvbi1g-a.oregon-postgres.render.com/sharemarket_likd';
 
