@@ -124,7 +124,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     schedule: "15 10 * * 1-5"
-    startCommand: node scripts/ingest-today.js
+    dockerCommand: node scripts/ingest-today.js
     envVars:
       - key: INGEST_MODE
         value: live
@@ -145,7 +145,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     schedule: "30 14 * * 1-5"
-    startCommand: node scripts/ingest-today.js
+    dockerCommand: node scripts/ingest-today.js
     envVars:
       - key: INGEST_MODE
         value: bhav
