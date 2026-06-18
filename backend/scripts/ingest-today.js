@@ -23,11 +23,12 @@ const MODE_RAW = (process.env.INGEST_MODE || 'all').toLowerCase();
 const MODE = ['live', 'bhav', 'all'].includes(MODE_RAW) ? MODE_RAW : 'all';
 
 // ── Date (IST timezone, or DATE_OVERRIDE env var for manual runs) ─────────────
-// Targets the most recently COMPLETED trading day in IST. This is resilient to
-// scheduler delays — a 20:00 IST cron that fires hours late (e.g. 03:00 IST
-// next day) still picks the previous weekday, whose bhav copy IS published.
-//   - Weekday and time >= 19:00 IST (NSE bhav publish): today
-//   - Otherwise: walk back to the previous weekday
+// Per mode:
+//   - live: always today (live APIs serve only the current session; for weekend
+//     manual runs, walks back to last weekday).
+//   - bhav/all: walks back to the last weekday whose bhav copy is published
+//     (file appears ~19:00 IST), so a delayed 20:00 IST cron still gets the
+//     right date even if it fires after midnight.
 let TARGET_DATE, BHAV_DATE_STR;
 if (process.env.DATE_OVERRIDE && /^\d{4}-\d{2}-\d{2}$/.test(process.env.DATE_OVERRIDE)) {
   TARGET_DATE   = process.env.DATE_OVERRIDE;
@@ -35,10 +36,18 @@ if (process.env.DATE_OVERRIDE && /^\d{4}-\d{2}-\d{2}$/.test(process.env.DATE_OVE
   BHAV_DATE_STR = `${dy}${mo}${yr}`;
 } else {
   const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  const beforePublish = istNow.getUTCHours() < 19;
   const target = new Date(istNow);
   const isWeekend = d => d.getUTCDay() === 0 || d.getUTCDay() === 6;
-  if (beforePublish || isWeekend(target)) {
+  // Live mode must target TODAY — NSE live APIs serve only the current session.
+  // Walking back here would cause the isToday check below to skip live entirely.
+  // Bhav/all mode walks back if the bhav file isn't published yet (~19:00 IST)
+  // or if it's a weekend, since bhav archives any past date.
+  if (MODE !== 'live') {
+    const beforePublish = istNow.getUTCHours() < 19;
+    if (beforePublish || isWeekend(target)) {
+      do { target.setUTCDate(target.getUTCDate() - 1); } while (isWeekend(target));
+    }
+  } else if (isWeekend(target)) {
     do { target.setUTCDate(target.getUTCDate() - 1); } while (isWeekend(target));
   }
   const yr = target.getUTCFullYear();
@@ -229,35 +238,57 @@ async function main() {
     return count;
   }
 
+  // NSE band-hitters API has shipped TWO response shapes — handle both:
+  //   Format A (legacy):  { symbol, series, open, high, low, prev, close, vol, pctChange }
+  //                       close = LTP, vol = raw share count
+  //   Format B (current): { symbol, series, ltp, change, pChange, highPrice, lowPrice,
+  //                         yearHigh, yearLow, priceBand, turnover, totalTradedVol }
+  //                       totalTradedVol is in LAKHS of shares (×1e5 → shares)
+  //                       turnover is in CRORES of rupees (×1e7 → rupees)
+  //                       No open price, no prev close (compute prev = ltp − change)
+  // priceBand is the % band tier ("5", "2"), not a price — so we use LTP for the
+  // band column (the band price equals the LTP when a stock hits the circuit).
+  const bandRow = (r, bandField) => {
+    const ltp = p(r.ltp ?? r.close ?? r.lastPrice);
+    let chng = p(r.chng ?? r.change);
+    let prevClose = p(r.prevClose ?? r.prev_close ?? r.prev);
+    if (prevClose == null && ltp != null && chng != null) prevClose = +(ltp - chng).toFixed(2);
+    if (chng == null && ltp != null && prevClose != null) chng = +(ltp - prevClose).toFixed(2);
+
+    let vol = bi(r.vol ?? r.volume);
+    if (vol == null && r.totalTradedVol != null) vol = Math.round(parseFloat(r.totalTradedVol) * 1e5);
+    else if (vol == null && r.totalTradedVolume != null) vol = bi(r.totalTradedVolume);
+
+    let value = p(r.value ?? r.totalTradedValue);
+    if (value == null && r.turnover != null) value = +(parseFloat(r.turnover) * 1e7).toFixed(2);
+    if (value == null && ltp != null && vol != null) value = +(ltp * vol).toFixed(2);
+
+    const pctChng = p(r.pChange ?? r.pctChange ?? r.perChange);
+    const cpField = bandField === 'upper_band' ? (r.upperCP ?? r.upper_cp) : (r.lowerCP ?? r.lower_cp);
+    const band = p(cpField) ?? ltp;
+    return [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
+            p(r.openPrice ?? r.open), p(r.highPrice ?? r.high), p(r.lowPrice ?? r.low),
+            prevClose, ltp, chng, pctChng, vol, value, band,
+            p(r.yearHigh ?? r['52WH']), p(r.yearLow ?? r['52WL']), JSON.stringify(r)];
+  };
+
   // ── Insert: Upper Band Hitters ─────────────────────────────────────────────
-  const UBH_COLS = ['source_date','symbol','series','high_price','low_price','ltp','chng','pct_chng','volume','value','upper_band','week_52_high','week_52_low','raw_json'];
+  const UBH_COLS = ['source_date','symbol','series','open_price','high_price','low_price','prev_close','ltp','chng','pct_chng','volume','value','upper_band','week_52_high','week_52_low','raw_json'];
   const UBH_CONFLICT = `ON CONFLICT (symbol,source_date) DO UPDATE SET
-    high_price=EXCLUDED.high_price, low_price=EXCLUDED.low_price,
-    ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
+    open_price=EXCLUDED.open_price, high_price=EXCLUDED.high_price, low_price=EXCLUDED.low_price,
+    prev_close=EXCLUDED.prev_close, ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
     volume=EXCLUDED.volume, value=EXCLUDED.value, upper_band=EXCLUDED.upper_band,
     week_52_high=EXCLUDED.week_52_high, week_52_low=EXCLUDED.week_52_low, raw_json=EXCLUDED.raw_json`;
-  const ubhCount = await batchUpsert('upper_band_hitters', UBH_COLS, upperBand, UBH_CONFLICT, r => {
-    const vol = r.totalTradedVol != null ? Math.round(parseFloat(r.totalTradedVol) * 1e5) : null;
-    const val = r.turnover != null ? parseFloat((parseFloat(r.turnover) * 1e7).toFixed(2)) : null;
-    return [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
-            p(r.highPrice), p(r.lowPrice), p(r.ltp), p(r.change), p(r.pChange),
-            vol, val, p(r.priceBand), p(r.yearHigh), p(r.yearLow), JSON.stringify(r)];
-  });
+  const ubhCount = await batchUpsert('upper_band_hitters', UBH_COLS, upperBand, UBH_CONFLICT, r => bandRow(r, 'upper_band'));
 
   // ── Insert: Lower Band Hitters ─────────────────────────────────────────────
-  const LBH_COLS = ['source_date','symbol','series','high_price','low_price','ltp','chng','pct_chng','volume','value','lower_band','week_52_high','week_52_low','raw_json'];
+  const LBH_COLS = ['source_date','symbol','series','open_price','high_price','low_price','prev_close','ltp','chng','pct_chng','volume','value','lower_band','week_52_high','week_52_low','raw_json'];
   const LBH_CONFLICT = `ON CONFLICT (symbol,source_date) DO UPDATE SET
-    high_price=EXCLUDED.high_price, low_price=EXCLUDED.low_price,
-    ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
+    open_price=EXCLUDED.open_price, high_price=EXCLUDED.high_price, low_price=EXCLUDED.low_price,
+    prev_close=EXCLUDED.prev_close, ltp=EXCLUDED.ltp, chng=EXCLUDED.chng, pct_chng=EXCLUDED.pct_chng,
     volume=EXCLUDED.volume, value=EXCLUDED.value, lower_band=EXCLUDED.lower_band,
     week_52_high=EXCLUDED.week_52_high, week_52_low=EXCLUDED.week_52_low, raw_json=EXCLUDED.raw_json`;
-  const lbhCount = await batchUpsert('lower_band_hitters', LBH_COLS, lowerBand, LBH_CONFLICT, r => {
-    const vol = r.totalTradedVol != null ? Math.round(parseFloat(r.totalTradedVol) * 1e5) : null;
-    const val = r.turnover != null ? parseFloat((parseFloat(r.turnover) * 1e7).toFixed(2)) : null;
-    return [TARGET_DATE, tr(r.symbol||r.nsesymbol), tr(r.series||'EQ'),
-            p(r.highPrice), p(r.lowPrice), p(r.ltp), p(r.change), p(r.pChange),
-            vol, val, p(r.priceBand), p(r.yearHigh), p(r.yearLow), JSON.stringify(r)];
-  });
+  const lbhCount = await batchUpsert('lower_band_hitters', LBH_COLS, lowerBand, LBH_CONFLICT, r => bandRow(r, 'lower_band'));
 
   // ── Insert: Volume Gainers ─────────────────────────────────────────────────
   const VG_COLS = ['source_date','symbol','ltp','pct_chng','volume','value','prev_volume','volume_ratio','raw_json'];
