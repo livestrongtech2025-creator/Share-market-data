@@ -32,6 +32,7 @@ yarn-error.log*
 # Database
 *.sqlite
 *.db
+*.sql
 
 # ML Models (large files)
 ai-service/models/*.pkl

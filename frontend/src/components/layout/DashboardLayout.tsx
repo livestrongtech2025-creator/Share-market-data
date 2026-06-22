@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/auth.store';
+import { authApi } from '@/lib/api';
 import Sidebar from './Sidebar';
 import Header from './Header';
+
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || 'admin@nseanalytics.com';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'Admin@123';
 
 function NeonBackdrop() {
   return (
@@ -36,14 +39,33 @@ function NeonBackdrop() {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
-  const router = useRouter();
+  const { isAuthenticated, setAuth } = useAuthStore();
+  const [autoLoginFailed, setAutoLoginFailed] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) router.push('/login');
-  }, [isAuthenticated, router]);
+    if (isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authApi.login(DEMO_EMAIL, DEMO_PASSWORD);
+        if (cancelled) return;
+        setAuth(res.data.user, res.data.accessToken);
+      } catch {
+        if (!cancelled) setAutoLoginFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, setAuth]);
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+        {autoLoginFailed ? 'Unable to connect. Please refresh the page.' : 'Loading...'}
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-screen">

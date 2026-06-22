@@ -24,7 +24,13 @@ api.interceptors.response.use(
       Cookies.remove('auth_token');
       localStorage.removeItem('auth_token');
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        try {
+          localStorage.removeItem('nse-auth');
+        } catch {}
+        const url = error.config?.url || '';
+        if (!url.includes('/auth/login')) {
+          window.location.reload();
+        }
       }
     }
     return Promise.reject(error);
