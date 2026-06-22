@@ -57,7 +57,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\backend'
 
 Start-Sleep -Seconds 3
 
-Write-Host "Starting Frontend (port 3000)..." -ForegroundColor Green
+Write-Host "Starting Frontend (port 3002)..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\frontend'; Write-Host 'Frontend' -ForegroundColor Cyan; npm run dev"
 
 Write-Host ""
@@ -71,7 +71,7 @@ Write-Host "  uvicorn app.main:app --reload --host 0.0.0.0 --port 8000" -Foregro
 
 Write-Host ""
 Write-Host "=== Access URLs ===" -ForegroundColor Cyan
-Write-Host "  Dashboard:   http://localhost:3000" -ForegroundColor White
+Write-Host "  Dashboard:   http://localhost:3002" -ForegroundColor White
 Write-Host "  API:         http://localhost:3001/api" -ForegroundColor White
 Write-Host "  Swagger:     http://localhost:3001/docs" -ForegroundColor White
 Write-Host "  AI Service:  http://localhost:8000/docs" -ForegroundColor White
