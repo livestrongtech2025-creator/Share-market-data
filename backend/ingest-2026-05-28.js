@@ -152,6 +152,33 @@ async function main() {
   const bhavCopy = await fetchBhavCopy();
   console.log('');
 
+  // Handles both NSE response shapes:
+  //   Format A (legacy):  { open, high, low, close (=LTP), prev, vol, pctChange }
+  //   Format B (current): { ltp, change, pChange, highPrice, lowPrice, yearHigh,
+  //                          yearLow, priceBand (%), turnover (CR), totalTradedVol (LAKHS) }
+  const bandValues = (r, bandField) => {
+    const ltp = p(r.ltp ?? r.close ?? r.lastPrice);
+    let chng = p(r.chng ?? r.change);
+    let prevClose = p(r.prevClose ?? r.prev_close ?? r.prev);
+    if (prevClose == null && ltp != null && chng != null) prevClose = +(ltp - chng).toFixed(2);
+    if (chng == null && ltp != null && prevClose != null) chng = +(ltp - prevClose).toFixed(2);
+
+    let vol = bi(r.vol ?? r.volume);
+    if (vol == null && r.totalTradedVol != null) vol = Math.round(parseFloat(r.totalTradedVol) * 1e5);
+    else if (vol == null && r.totalTradedVolume != null) vol = bi(r.totalTradedVolume);
+
+    let value = p(r.value ?? r.totalTradedValue);
+    if (value == null && r.turnover != null) value = +(parseFloat(r.turnover) * 1e7).toFixed(2);
+    if (value == null && ltp != null && vol != null) value = +(ltp * vol).toFixed(2);
+
+    const cp = bandField === 'upper' ? (r.upperCP ?? r.upper_cp) : (r.lowerCP ?? r.lower_cp);
+    const band = p(cp) ?? ltp;
+    return [TARGET_DATE, trim(r.symbol||r.nsesymbol), trim(r.series||'EQ'),
+            p(r.openPrice ?? r.open), p(r.highPrice ?? r.high), p(r.lowPrice ?? r.low), prevClose,
+            ltp, chng, p(r.pChange ?? r.pctChange), vol, value,
+            band, p(r.yearHigh ?? r['52WH']), p(r.yearLow ?? r['52WL']), JSON.stringify(r)];
+  };
+
   // ── INSERT: Upper Band Hitters ───────────────────────────────────────────
   console.log('Inserting upper band hitters...');
   let ubhCount = 0;
@@ -162,11 +189,7 @@ async function main() {
            (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,upper_band,week_52_high,week_52_low,raw_json)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          ON CONFLICT (symbol,source_date) DO NOTHING`,
-        [TARGET_DATE, trim(r.symbol||r.nsesymbol), trim(r.series||'EQ'),
-         p(r.open), p(r.high), p(r.low), p(r.prevClose||r.prev_close),
-         p(r.ltp||r.lastPrice), p(r.chng||r.change), p(r.pChange),
-         bi(r.totalTradedVolume||r.volume), p(r.totalTradedValue),
-         p(r.upperCP), p(r['52WH']), p(r['52WL']), JSON.stringify(r)],
+        bandValues(r, 'upper'),
       );
       ubhCount++;
     } catch (e) { console.log(`  UBH skip (${r.symbol}): ${e.message}`); }
@@ -183,11 +206,7 @@ async function main() {
            (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,lower_band,week_52_high,week_52_low,raw_json)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          ON CONFLICT (symbol,source_date) DO NOTHING`,
-        [TARGET_DATE, trim(r.symbol||r.nsesymbol), trim(r.series||'EQ'),
-         p(r.open), p(r.high), p(r.low), p(r.prevClose||r.prev_close),
-         p(r.ltp||r.lastPrice), p(r.chng||r.change), p(r.pChange),
-         bi(r.totalTradedVolume||r.volume), p(r.totalTradedValue),
-         p(r.lowerCP), p(r['52WH']), p(r['52WL']), JSON.stringify(r)],
+        bandValues(r, 'lower'),
       );
       lbhCount++;
     } catch (e) { console.log(`  LBH skip (${r.symbol}): ${e.message}`); }

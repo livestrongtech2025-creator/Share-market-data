@@ -136,11 +136,16 @@ async function main() {
 
   for (const r of upperCircuit) {
     try {
+      const chng = r.close != null && r.prev != null ? +(r.close - r.prev).toFixed(2) : null;
+      const value = r.close != null && r.vol != null ? +(r.close * r.vol).toFixed(2) : null;
       await db.query(
-        `INSERT INTO upper_band_hitters (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,pct_chng,volume,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-         ON CONFLICT (symbol,source_date) DO UPDATE SET pct_chng=EXCLUDED.pct_chng,ltp=EXCLUDED.ltp`,
-        [TARGET_DATE_RESOLVED,r.symbol,r.series,r.open,r.high,r.low,r.prev,r.close,r.pctChange,r.vol,JSON.stringify(r)]
+        `INSERT INTO upper_band_hitters (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,upper_band,raw_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         ON CONFLICT (symbol,source_date) DO UPDATE SET
+           pct_chng=EXCLUDED.pct_chng, ltp=EXCLUDED.ltp, chng=EXCLUDED.chng,
+           value=COALESCE(upper_band_hitters.value, EXCLUDED.value),
+           upper_band=COALESCE(upper_band_hitters.upper_band, EXCLUDED.upper_band)`,
+        [TARGET_DATE_RESOLVED,r.symbol,r.series,r.open,r.high,r.low,r.prev,r.close,chng,r.pctChange,r.vol,value,r.close,JSON.stringify(r)]
       );
       ubhCount++;
     } catch(e) { /* skip */ }
@@ -148,11 +153,16 @@ async function main() {
 
   for (const r of lowerCircuit) {
     try {
+      const chng = r.close != null && r.prev != null ? +(r.close - r.prev).toFixed(2) : null;
+      const value = r.close != null && r.vol != null ? +(r.close * r.vol).toFixed(2) : null;
       await db.query(
-        `INSERT INTO lower_band_hitters (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,pct_chng,volume,raw_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-         ON CONFLICT (symbol,source_date) DO UPDATE SET pct_chng=EXCLUDED.pct_chng,ltp=EXCLUDED.ltp`,
-        [TARGET_DATE_RESOLVED,r.symbol,r.series,r.open,r.high,r.low,r.prev,r.close,r.pctChange,r.vol,JSON.stringify(r)]
+        `INSERT INTO lower_band_hitters (source_date,symbol,series,open_price,high_price,low_price,prev_close,ltp,chng,pct_chng,volume,value,lower_band,raw_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         ON CONFLICT (symbol,source_date) DO UPDATE SET
+           pct_chng=EXCLUDED.pct_chng, ltp=EXCLUDED.ltp, chng=EXCLUDED.chng,
+           value=COALESCE(lower_band_hitters.value, EXCLUDED.value),
+           lower_band=COALESCE(lower_band_hitters.lower_band, EXCLUDED.lower_band)`,
+        [TARGET_DATE_RESOLVED,r.symbol,r.series,r.open,r.high,r.low,r.prev,r.close,chng,r.pctChange,r.vol,value,r.close,JSON.stringify(r)]
       );
       lbhCount++;
     } catch(e) { /* skip */ }
