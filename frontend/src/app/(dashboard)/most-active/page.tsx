@@ -10,17 +10,14 @@ import { Activity } from 'lucide-react';
 
 const COLUMNS = [
   { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold tracking-wide text-slate-900 dark:text-white">{v || '—'}</span> },
-  { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="badge badge-violet">{v}</span> : '—' },
-  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
   { key: 'openPrice', header: 'Open (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
   { key: 'highPrice', header: 'High (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">₹{Number(v).toFixed(2)}</span> : '—' },
   { key: 'lowPrice', header: 'Low (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-rose-500 dark:text-rose-400">₹{Number(v).toFixed(2)}</span> : '—' },
   { key: 'prevClose', header: 'Prev Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
-  { key: 'chng', header: 'Chng (₹)', sortable: true, render: (v: any) => { if (v == null) return '—'; const n = Number(v); return <span className={`font-mono font-semibold tabular-nums ${n >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>{n >= 0 ? '+' : ''}₹{n.toFixed(2)}</span>; } },
+  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
   { key: 'pctChng', header: '%Chng', sortable: true, render: (v: any) => <PriceChange value={v} /> },
   { key: 'volume', header: 'Volume', sortable: true, render: (v: any) => <span className="font-mono tabular-nums">{formatVolume(v)}</span> },
-  { key: 'value', header: 'Turnover (₹ Cr)', sortable: true, render: (v: any) => { const r = Number(v); if (!v || r === 0) return '—'; if (r >= 1e9) return `₹${(r/1e9).toFixed(2)}K Cr`; if (r >= 1e7) return `₹${(r/1e7).toFixed(2)} Cr`; if (r >= 1e5) return `₹${(r/1e5).toFixed(2)} L`; return `₹${r.toFixed(2)}`; } },
-  { key: 'trades', header: 'Trades', sortable: true, render: (v: any) => v ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{Number(v).toLocaleString('en-IN')}</span> : '—' },
+  { key: 'value', header: 'Value (₹ Cr)', sortable: true, render: (v: any) => { const r = Number(v); if (!v || r === 0) return '—'; if (r >= 1e9) return `₹${(r/1e9).toFixed(2)}K Cr`; if (r >= 1e7) return `₹${(r/1e7).toFixed(2)} Cr`; if (r >= 1e5) return `₹${(r/1e5).toFixed(2)} L`; return `₹${r.toFixed(2)}`; } },
   { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? <span className="font-mono text-xs tabular-nums">{new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span> : '—' },
 ];
 

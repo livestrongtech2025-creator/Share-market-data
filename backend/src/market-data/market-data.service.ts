@@ -56,10 +56,24 @@ export class MarketDataService {
     for (const record of records) {
       try {
         const norm = this.normalizeNseRecord(record);
-        // NSE lhrhitters API: close=LTP, prev=prevClose, vol=volume, pctChange→pctchange
+        // NSE band-hitters API ships two shapes:
+        //   Legacy: close (LTP), prev, vol, pctChange
+        //   Current: ltp, change, pChange, totalTradedVol (LAKHS), turnover (CRORES)
         const ltp = this.parseNumber(norm.close || norm.ltp || norm.last_price || record.ltp);
         const prevCloseVal = this.parseNumber(norm.prev || norm.prev_close || norm.prevclose || record.prevClose);
-        const vol = this.parseBigInt(norm.vol || norm.volume || norm.total_traded_quantity || record.totalTradedVolume);
+        let vol = this.parseBigInt(norm.vol || norm.volume || norm.total_traded_quantity || record.totalTradedVolume);
+        if (vol == null) {
+          const ttvLakhs = this.parseNumber(norm.totaltradedvol || record.totalTradedVol);
+          if (ttvLakhs != null) vol = Math.round(ttvLakhs * 1e5);
+        }
+        let value = this.parseNumber(norm.value || norm.total_traded_value || record.totalTradedValue);
+        if (value == null) {
+          const turnoverCr = this.parseNumber(norm.turnover || record.turnover);
+          if (turnoverCr != null) value = parseFloat((turnoverCr * 1e7).toFixed(2));
+        }
+        if (value == null && ltp != null && vol != null) {
+          value = parseFloat((ltp * vol).toFixed(2));
+        }
         const entity = this.lbhRepo.create({
           sourceDate: date,
           symbol: (norm.symbol || norm.nsesymbol || record.symbol || '').trim(),
@@ -73,8 +87,7 @@ export class MarketDataService {
             ?? (ltp != null && prevCloseVal != null ? parseFloat((ltp - prevCloseVal).toFixed(2)) : undefined),
           pctChng: this.parseNumber(norm.pctchange || norm.pct_chng || norm.per_change || record.pChange || record.pctChange),
           volume: vol,
-          value: this.parseNumber(norm.value || norm.total_traded_value || record.totalTradedValue)
-            ?? (ltp != null && vol != null ? parseFloat((ltp * vol).toFixed(2)) : undefined),
+          value,
           lowerBand: this.parseNumber(norm.lower_band || norm.lower_cp || norm.close || record.lowerCP) ?? ltp,
           week52High: this.parseNumber(norm.week_52_high || norm['_52wk_high'] || record['52WH']),
           week52Low: this.parseNumber(norm.week_52_low || norm['_52wk_low'] || record['52WL']),
@@ -96,10 +109,24 @@ export class MarketDataService {
     for (const record of records) {
       try {
         const norm = this.normalizeNseRecord(record);
-        // NSE lhrhitters API: close=LTP, prev=prevClose, vol=volume, pctChange→pctchange
+        // NSE band-hitters API ships two shapes:
+        //   Legacy: close (LTP), prev, vol, pctChange
+        //   Current: ltp, change, pChange, totalTradedVol (LAKHS), turnover (CRORES)
         const ltp = this.parseNumber(norm.close || norm.ltp || norm.last_price || record.ltp);
         const prevCloseVal = this.parseNumber(norm.prev || norm.prev_close || norm.prevclose || record.prevClose);
-        const vol = this.parseBigInt(norm.vol || norm.volume || record.totalTradedVolume);
+        let vol = this.parseBigInt(norm.vol || norm.volume || record.totalTradedVolume);
+        if (vol == null) {
+          const ttvLakhs = this.parseNumber(norm.totaltradedvol || record.totalTradedVol);
+          if (ttvLakhs != null) vol = Math.round(ttvLakhs * 1e5);
+        }
+        let value = this.parseNumber(norm.value || norm.total_traded_value || record.totalTradedValue);
+        if (value == null) {
+          const turnoverCr = this.parseNumber(norm.turnover || record.turnover);
+          if (turnoverCr != null) value = parseFloat((turnoverCr * 1e7).toFixed(2));
+        }
+        if (value == null && ltp != null && vol != null) {
+          value = parseFloat((ltp * vol).toFixed(2));
+        }
         const entity = this.ubhRepo.create({
           sourceDate: date,
           symbol: (norm.symbol || norm.nsesymbol || record.symbol || '').trim(),
@@ -113,8 +140,7 @@ export class MarketDataService {
             ?? (ltp != null && prevCloseVal != null ? parseFloat((ltp - prevCloseVal).toFixed(2)) : undefined),
           pctChng: this.parseNumber(norm.pctchange || norm.pct_chng || norm.per_change || record.pChange || record.pctChange),
           volume: vol,
-          value: this.parseNumber(norm.value || norm.total_traded_value || record.totalTradedValue)
-            ?? (ltp != null && vol != null ? parseFloat((ltp * vol).toFixed(2)) : undefined),
+          value,
           upperBand: this.parseNumber(norm.upper_band || norm.upper_cp || norm.uppercp || record.upperCP) ?? ltp,
           week52High: this.parseNumber(norm.week_52_high || norm['_52wk_high'] || record['52WH']),
           week52Low: this.parseNumber(norm.week_52_low || norm['_52wk_low'] || record['52WL']),
@@ -173,25 +199,29 @@ export class MarketDataService {
     for (const record of records) {
       try {
         const norm = this.normalizeNseRecord(record);
-        // Most-active sourced from bhav_copy: fields use snake_case with value in Lakhs (TURNOVER_LACS)
-        const ttvLacs = this.parseNumber(
-          norm.turnover_lacs || norm.total_traded_value || norm.totaltradedvalue || record.totalTradedValue,
-        );
+        // Most-active ships two shapes:
+        //   Bhav-copy backfill: snake_case (OPEN_PRICE/HIGH_PRICE/...), TURNOVER_LACS in Lakhs.
+        //   NSE live API: camelCase (dayHigh/dayLow/previousClose/lastPrice), totalTradedValue in Rupees.
+        const turnoverLacs = this.parseNumber(norm.turnover_lacs);
+        const liveTtv = this.parseNumber(norm.totaltradedvalue || record.totalTradedValue);
+        const value =
+          turnoverLacs != null ? parseFloat((turnoverLacs * 1e5).toFixed(2)) :
+          liveTtv != null ? liveTtv :
+          this.parseNumber(norm.total_traded_value || norm.value || record.value);
         const entity = this.maeRepo.create({
           sourceDate: date,
           symbol: (norm.symbol || record.symbol || '').trim(),
           series: (norm.series || record.series || '').trim(),
           openPrice: this.parseNumber(norm.open_price || norm.open || record.open),
-          highPrice: this.parseNumber(norm.high_price || norm.high || record.high),
-          lowPrice: this.parseNumber(norm.low_price || norm.low || record.low),
-          prevClose: this.parseNumber(norm.prev_close || norm.prevclose || record.prevClose),
+          highPrice: this.parseNumber(norm.high_price || norm.high || norm.dayhigh || record.dayHigh),
+          lowPrice: this.parseNumber(norm.low_price || norm.low || norm.daylow || record.dayLow),
+          prevClose: this.parseNumber(norm.prev_close || norm.prevclose || norm.previousclose || record.prevClose || record.previousClose),
           ltp: this.parseNumber(norm.ltp || norm.last_price || norm.lastprice || norm.close_price || record.ltp || record.lastPrice),
           chng: this.parseNumber(norm.chng || norm.change || record.change),
           pctChng: this.parseNumber(norm.pct_chng || norm.pctchange || norm.pchange || record.pChange || record.pctChange),
-          volume: this.parseBigInt(norm.total_traded_qty || norm.ttl_trd_qnty || norm.totaltradedqty || norm.volume || record.totalTradedVolume),
-          // value stored as Lakhs in bhav_copy → convert to Rupees
-          value: ttvLacs != null ? parseFloat((ttvLacs * 1e5).toFixed(2)) : this.parseNumber(norm.value || record.value),
-          trades: this.parseBigInt(norm.total_trades || norm.no_of_trades || norm.trades || record.numberOfTrades || record.totalTrades),
+          volume: this.parseBigInt(norm.total_traded_qty || norm.ttl_trd_qnty || norm.totaltradedqty || norm.totaltradedvolume || norm.quantitytraded || norm.volume || record.totalTradedVolume || record.quantityTraded),
+          value,
+          trades: this.parseBigInt(norm.total_trades || norm.no_of_trades || norm.numberoftrades || norm.trades || record.numberOfTrades || record.totalTrades),
           rawJson: record,
         });
         await this.maeRepo.upsert(entity, { conflictPaths: ['symbol', 'sourceDate'] });
@@ -303,6 +333,24 @@ export class MarketDataService {
 
     if (query.maxVolume !== undefined && query.maxVolume !== null) {
       qb.andWhere('e.totalTradedQty <= :maxVolume', { maxVolume: query.maxVolume });
+    }
+
+    // % drop filter — formula: (prevClose - closePrice) * 100 / prevClose. Positive ⇒ price fell.
+    const pctDropExpr = '((e.prev_close - e.close_price) * 100.0 / NULLIF(e.prev_close, 0))';
+    if (query.minPctDrop !== undefined && query.minPctDrop !== null) {
+      qb.andWhere(`${pctDropExpr} >= :minPctDrop`, { minPctDrop: query.minPctDrop });
+    }
+    if (query.maxPctDrop !== undefined && query.maxPctDrop !== null) {
+      qb.andWhere(`${pctDropExpr} <= :maxPctDrop`, { maxPctDrop: query.maxPctDrop });
+    }
+
+    // Turnover input is Crores; totalTradedValue is stored as Lakhs → 1 Cr = 100 Lakhs.
+    if (query.minTurnoverCr !== undefined && query.minTurnoverCr !== null) {
+      qb.andWhere('e.totalTradedValue >= :minTurnover', { minTurnover: query.minTurnoverCr * 100 });
+    }
+
+    if (query.minDelivPer !== undefined && query.minDelivPer !== null) {
+      qb.andWhere('e.delivPer >= :minDelivPer', { minDelivPer: query.minDelivPer });
     }
 
     const sortField = query.sortBy || 'sourceDate';

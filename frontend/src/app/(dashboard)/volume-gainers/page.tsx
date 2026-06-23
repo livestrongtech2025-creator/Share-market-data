@@ -8,25 +8,56 @@ import { marketApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { BarChart2 } from 'lucide-react';
 
+const parseNum = (v: any): number | null => {
+  if (v == null || v === '' || v === '-') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+const renderVolChange = (v: any) => {
+  const n = parseNum(v);
+  if (n == null) return '—';
+  const color = n >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400';
+  return <span className={`font-mono font-semibold tabular-nums ${color}`}>{n >= 0 ? '+' : ''}{n.toFixed(2)}%</span>;
+};
+
+const renderTurnover = (v: any) => {
+  const r = Number(v);
+  if (!v || r === 0) return '—';
+  if (r >= 1e9) return `₹${(r/1e9).toFixed(2)}K Cr`;
+  if (r >= 1e7) return `₹${(r/1e7).toFixed(2)} Cr`;
+  if (r >= 1e5) return `₹${(r/1e5).toFixed(2)} L`;
+  return `₹${r.toFixed(2)}`;
+};
+
 const COLUMNS = [
   { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold tracking-wide text-slate-900 dark:text-white">{v || '—'}</span> },
-  { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="badge badge-blue">{v}</span> : '—' },
-  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
-  { key: 'pctChng', header: '% Chng', sortable: true, render: (v: any) => <PriceChange value={v} /> },
   { key: 'volume', header: 'Volume', sortable: true, render: (v: any) => <span className="font-mono font-semibold tabular-nums text-cyan-600 dark:text-cyan-300">{formatVolume(v)}</span> },
   { key: 'prevVolume', header: '1W Avg Vol', sortable: true, render: (v: any) => <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatVolume(v)}</span> },
+  { key: 'volumeRatio', header: '1W Change', sortable: true, render: renderVolChange },
   {
-    key: 'volumeRatio',
-    header: 'Vol Surge',
-    sortable: true,
-    render: (v: any) => {
-      if (!v) return '—';
-      const n = Number(v);
-      const color = n >= 5 ? 'text-rose-500 dark:text-rose-400' : n >= 2 ? 'text-amber-500 dark:text-amber-400' : 'text-cyan-600 dark:text-cyan-300';
-      return <span className={`font-mono font-extrabold tabular-nums ${color}`}>{n.toFixed(2)}×</span>;
+    key: 'week2AvgVolume',
+    header: '2W Avg Vol',
+    sortable: false,
+    render: (_v: any, row: any) => {
+      const raw = row?.rawJson ?? {};
+      const w2 = raw.week2AvgVolume ?? raw.week_2_avg_volume ?? raw.week2avgvolume;
+      return <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatVolume(w2)}</span>;
     },
   },
-  { key: 'value', header: 'Turnover (₹ Cr)', sortable: true, render: (v: any) => { const r = Number(v); if (!v || r === 0) return '—'; if (r >= 1e9) return `₹${(r/1e9).toFixed(2)}K Cr`; if (r >= 1e7) return `₹${(r/1e7).toFixed(2)} Cr`; if (r >= 1e5) return `₹${(r/1e5).toFixed(2)} L`; return `₹${r.toFixed(2)}`; } },
+  {
+    key: 'week2volChange',
+    header: '2W Change',
+    sortable: false,
+    render: (_v: any, row: any) => {
+      const raw = row?.rawJson ?? {};
+      const w2 = raw.week2volChange ?? raw.week_2_vol_change ?? raw.week2volchange;
+      return renderVolChange(w2);
+    },
+  },
+  { key: 'ltp', header: 'LTP (₹)', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
+  { key: 'pctChng', header: '% Chng', sortable: true, render: (v: any) => <PriceChange value={v} /> },
+  { key: 'value', header: 'Turnover (₹ Cr)', sortable: true, render: renderTurnover },
   { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? <span className="font-mono text-xs tabular-nums">{new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span> : '—' },
 ];
 

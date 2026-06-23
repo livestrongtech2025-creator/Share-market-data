@@ -6,37 +6,37 @@ import { useBhavCopy, useBhavCopySeries } from '@/hooks/useMarketData';
 import { marketApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Database, Filter, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
-import clsx from 'clsx';
 
 interface Filters {
-  dateMode: 'single' | 'range';
   date: string;
-  startDate: string;
-  endDate: string;
   series: string;
+  minPctDrop: string;
+  maxPctDrop: string;
+  minTurnoverCr: string;
+  minDelivPer: string;
 }
 
 const EMPTY_FILTERS: Filters = {
-  dateMode: 'single', date: '', startDate: '', endDate: '', series: '',
+  date: '', series: '',
+  minPctDrop: '', maxPctDrop: '', minTurnoverCr: '', minDelivPer: '',
 };
 
 function buildQueryParams(filters: Filters, page: number, limit: number, search: string) {
   const p: Record<string, any> = { page, limit };
   if (search) p.search = search;
-  if (filters.dateMode === 'single' && filters.date) p.date = filters.date;
-  else if (filters.dateMode === 'range' && filters.startDate && filters.endDate) {
-    p.startDate = filters.startDate;
-    p.endDate = filters.endDate;
-  }
+  if (filters.date) p.date = filters.date;
   if (filters.series) p.series = filters.series;
+  if (filters.minPctDrop !== '' && !isNaN(Number(filters.minPctDrop))) p.minPctDrop = Number(filters.minPctDrop);
+  if (filters.maxPctDrop !== '' && !isNaN(Number(filters.maxPctDrop))) p.maxPctDrop = Number(filters.maxPctDrop);
+  if (filters.minTurnoverCr !== '' && !isNaN(Number(filters.minTurnoverCr))) p.minTurnoverCr = Number(filters.minTurnoverCr);
+  if (filters.minDelivPer !== '' && !isNaN(Number(filters.minDelivPer))) p.minDelivPer = Number(filters.minDelivPer);
   return p;
 }
 
 function countActiveFilters(f: Filters, search: string): number {
   return [
-    f.dateMode === 'single' ? f.date : (f.startDate || f.endDate),
-    f.series, search,
-  ].filter(Boolean).length;
+    f.date, f.series, search, f.minPctDrop, f.maxPctDrop, f.minTurnoverCr, f.minDelivPer,
+  ].filter(v => v !== '' && v != null).length;
 }
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -83,7 +83,7 @@ export default function BhavCopyPage() {
   }, []);
 
   const handleExport = async () => {
-    const exportDate = filters.date || filters.startDate;
+    const exportDate = filters.date;
     if (!exportDate) { toast.error('Select a date to export'); return; }
     try {
       const res = await marketApi.exportCsv('bhav_copy', exportDate);
@@ -107,6 +107,22 @@ export default function BhavCopyPage() {
     { key: 'lowPrice', header: 'Low', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-rose-500 dark:text-rose-400">₹{Number(v).toFixed(2)}</span> : '—' },
     { key: 'lastPrice', header: 'Last', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
     { key: 'closePrice', header: 'Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-white">₹{Number(v).toFixed(2)}</span> : '—' },
+    {
+      key: 'pctDrop',
+      header: 'Percent Change',
+      render: (_v: any, row: any) => {
+        const prev = row?.prevClose != null ? Number(row.prevClose) : NaN;
+        const close = row?.closePrice != null ? Number(row.closePrice) : NaN;
+        if (!isFinite(prev) || !isFinite(close) || prev === 0) return '—';
+        const pct = ((prev - close) * 100) / prev;
+        const cls = pct > 0
+          ? 'text-rose-500 dark:text-rose-400'
+          : pct < 0
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-slate-500 dark:text-slate-400';
+        return <span className={`font-mono font-semibold tabular-nums ${cls}`}>{pct.toFixed(2)}%</span>;
+      },
+    },
     { key: 'avgPrice', header: 'Avg Price', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
     { key: 'totalTradedQty', header: 'Volume', sortable: true, render: (v: any) => <span className="font-mono tabular-nums">{formatVolume(v)}</span> },
     {
@@ -163,40 +179,10 @@ export default function BhavCopyPage() {
         {showFilters && (
           <div className="space-y-4 p-4">
             <div className="flex flex-wrap items-end gap-3">
-              <div className="flex overflow-hidden rounded-xl border border-white/10 text-xs font-semibold dark:border-white/10">
-                <button
-                  onClick={() => setFilter('dateMode', 'single')}
-                  className={clsx('px-3 py-1.5 transition-all',
-                    filters.dateMode === 'single'
-                      ? 'bg-gradient-to-br from-cyan-500 to-violet-500 text-white shadow-glow-cyan'
-                      : 'text-slate-600 hover:bg-cyan-500/10 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300')}
-                >Single Date</button>
-                <button
-                  onClick={() => setFilter('dateMode', 'range')}
-                  className={clsx('px-3 py-1.5 transition-all',
-                    filters.dateMode === 'range'
-                      ? 'bg-gradient-to-br from-cyan-500 to-violet-500 text-white shadow-glow-cyan'
-                      : 'text-slate-600 hover:bg-cyan-500/10 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300')}
-                >Date Range</button>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</label>
+                <input type="date" value={filters.date} onChange={e => setFilter('date', e.target.value)} className="input h-9 w-40 text-sm" />
               </div>
-
-              {filters.dateMode === 'single' ? (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</label>
-                  <input type="date" value={filters.date} onChange={e => setFilter('date', e.target.value)} className="input h-9 w-40 text-sm" />
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">From Date</label>
-                    <input type="date" value={filters.startDate} onChange={e => setFilter('startDate', e.target.value)} className="input h-9 w-40 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">To Date</label>
-                    <input type="date" value={filters.endDate} min={filters.startDate || undefined} onChange={e => setFilter('endDate', e.target.value)} className="input h-9 w-40 text-sm" />
-                  </div>
-                </>
-              )}
 
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Series</label>
@@ -218,14 +204,91 @@ export default function BhavCopyPage() {
                   />
                 </div>
               </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  title="(Prev Close − Close) × 100 / Prev Close"
+                >
+                  Min Percent Change
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={filters.minPctDrop}
+                  onChange={e => setFilter('minPctDrop', e.target.value)}
+                  placeholder="e.g. 2"
+                  className="input h-9 w-28 text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  title="(Prev Close − Close) × 100 / Prev Close"
+                >
+                  Max Percent Change
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={filters.maxPctDrop}
+                  onChange={e => setFilter('maxPctDrop', e.target.value)}
+                  placeholder="e.g. 5"
+                  className="input h-9 w-28 text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  title="Turnover in Crores — shows rows with turnover ≥ value"
+                >
+                  Min Turnover (₹ Cr)
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="1"
+                  min="0"
+                  value={filters.minTurnoverCr}
+                  onChange={e => setFilter('minTurnoverCr', e.target.value)}
+                  placeholder="e.g. 22"
+                  className="input h-9 w-32 text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  title="Delivery percentage — shows rows with delivery % ≥ value"
+                >
+                  Min Delivery %
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="1"
+                  min="0"
+                  max="100"
+                  value={filters.minDelivPer}
+                  onChange={e => setFilter('minDelivPer', e.target.value)}
+                  placeholder="e.g. 50"
+                  className="input h-9 w-32 text-sm"
+                />
+              </div>
             </div>
 
             {activeCount > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {filters.dateMode === 'single' && filters.date && <FilterChip label={`Date: ${filters.date}`} onRemove={() => setFilter('date', '')} />}
-                {filters.dateMode === 'range' && filters.startDate && <FilterChip label={`From: ${filters.startDate}`} onRemove={() => setFilter('startDate', '')} />}
-                {filters.dateMode === 'range' && filters.endDate && <FilterChip label={`To: ${filters.endDate}`} onRemove={() => setFilter('endDate', '')} />}
+                {filters.date && <FilterChip label={`Date: ${filters.date}`} onRemove={() => setFilter('date', '')} />}
                 {filters.series && <FilterChip label={`Series: ${filters.series}`} onRemove={() => setFilter('series', '')} />}
+                {filters.minPctDrop !== '' && <FilterChip label={`Min Percent Change: ${filters.minPctDrop}`} onRemove={() => setFilter('minPctDrop', '')} />}
+                {filters.maxPctDrop !== '' && <FilterChip label={`Max Percent Change: ${filters.maxPctDrop}`} onRemove={() => setFilter('maxPctDrop', '')} />}
+                {filters.minTurnoverCr !== '' && <FilterChip label={`Turnover ≥ ₹${filters.minTurnoverCr} Cr`} onRemove={() => setFilter('minTurnoverCr', '')} />}
+                {filters.minDelivPer !== '' && <FilterChip label={`Delivery % ≥ ${filters.minDelivPer}`} onRemove={() => setFilter('minDelivPer', '')} />}
                 {search && <FilterChip label={`Search: ${search}`} onRemove={() => { setSearchInput(''); setSearch(''); setPage(1); }} />}
               </div>
             )}

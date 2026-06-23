@@ -74,6 +74,27 @@ export class PaginationDto {
   @Type(() => Number)
   maxVolume?: number;
 
+  // Computed: (prevClose - closePrice) * 100 / prevClose — positive when price fell.
+  @ApiPropertyOptional({ description: 'Minimum % drop ((prevClose - close) * 100 / prevClose)' })
+  @IsOptional()
+  @Type(() => Number)
+  minPctDrop?: number;
+
+  @ApiPropertyOptional({ description: 'Maximum % drop ((prevClose - close) * 100 / prevClose)' })
+  @IsOptional()
+  @Type(() => Number)
+  maxPctDrop?: number;
+
+  @ApiPropertyOptional({ description: 'Minimum turnover in Crores (totalTradedValue stored as Lakhs, so Cr * 100)' })
+  @IsOptional()
+  @Type(() => Number)
+  minTurnoverCr?: number;
+
+  @ApiPropertyOptional({ description: 'Minimum delivery percentage (delivPer >= value)' })
+  @IsOptional()
+  @Type(() => Number)
+  minDelivPer?: number;
+
   get skip(): number {
     return ((this.page || 1) - 1) * (this.limit || 20);
   }
