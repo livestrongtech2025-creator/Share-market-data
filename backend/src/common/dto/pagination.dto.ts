@@ -95,6 +95,12 @@ export class PaginationDto {
   @Type(() => Number)
   minDelivPer?: number;
 
+  // Computed: turnover (this row) / turnover (same symbol's previous trading day).
+  @ApiPropertyOptional({ description: 'Minimum turnover multiple vs previous trading day for the same symbol' })
+  @IsOptional()
+  @Type(() => Number)
+  minTurnoverMultiple?: number;
+
   get skip(): number {
     return ((this.page || 1) - 1) * (this.limit || 20);
   }

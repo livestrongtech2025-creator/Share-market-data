@@ -335,8 +335,8 @@ export class MarketDataService {
       qb.andWhere('e.totalTradedQty <= :maxVolume', { maxVolume: query.maxVolume });
     }
 
-    // % drop filter — formula: (prevClose - closePrice) * 100 / prevClose. Positive ⇒ price fell.
-    const pctDropExpr = '((e.prev_close - e.close_price) * 100.0 / NULLIF(e.prev_close, 0))';
+    // Percent change filter — formula: (closePrice - prevClose) * 100 / prevClose. Positive ⇒ price rose.
+    const pctDropExpr = '((e.close_price - e.prev_close) * 100.0 / NULLIF(e.prev_close, 0))';
     if (query.minPctDrop !== undefined && query.minPctDrop !== null) {
       qb.andWhere(`${pctDropExpr} >= :minPctDrop`, { minPctDrop: query.minPctDrop });
     }
@@ -353,12 +353,44 @@ export class MarketDataService {
       qb.andWhere('e.delivPer >= :minDelivPer', { minDelivPer: query.minDelivPer });
     }
 
+    // Same-symbol previous trading day turnover (for turnover-multiple column / filter / sort).
+    const prevTtvExpr = `(
+      SELECT b2.total_traded_value FROM bhav_copy b2
+      WHERE b2.symbol = e.symbol
+        AND b2.series = e.series
+        AND b2.source_date < e.source_date
+      ORDER BY b2.source_date DESC
+      LIMIT 1
+    )`;
+    const turnoverMultipleExpr = `(e.total_traded_value / NULLIF(${prevTtvExpr}, 0))`;
+    qb.addSelect(prevTtvExpr, 'e_prev_ttv');
+
+    if (query.minTurnoverMultiple !== undefined && query.minTurnoverMultiple !== null) {
+      qb.andWhere(`${turnoverMultipleExpr} >= :minTurnoverMultiple`, { minTurnoverMultiple: query.minTurnoverMultiple });
+    }
+
     const sortField = query.sortBy || 'sourceDate';
     const sortOrder = query.sortOrder || 'DESC';
-    qb.orderBy(`e.${sortField}`, sortOrder as 'ASC' | 'DESC');
+    if (sortField === 'turnoverMultiple') {
+      qb.orderBy(turnoverMultipleExpr, sortOrder as 'ASC' | 'DESC', 'NULLS LAST');
+    } else {
+      qb.orderBy(`e.${sortField}`, sortOrder as 'ASC' | 'DESC');
+    }
+
+    const total = await qb.getCount();
     qb.skip(query.skip).take(query.limit || 20);
 
-    const [data, total] = await qb.getManyAndCount();
+    const { entities, raw } = await qb.getRawAndEntities();
+    const data = entities.map((entity, i) => {
+      const prev = raw[i]?.e_prev_ttv;
+      const prevNum = prev != null && prev !== '' ? Number(prev) : null;
+      const currNum = entity.totalTradedValue != null ? Number(entity.totalTradedValue) : null;
+      const multiple = prevNum != null && prevNum > 0 && currNum != null ? currNum / prevNum : null;
+      return Object.assign(entity, {
+        prevTotalTradedValue: prevNum,
+        turnoverMultiple: multiple,
+      });
+    });
     return new PaginatedResponse(data, total, query.page || 1, query.limit || 20);
   }
 

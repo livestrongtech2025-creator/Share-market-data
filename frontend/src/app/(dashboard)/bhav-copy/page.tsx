@@ -11,14 +11,14 @@ interface Filters {
   date: string;
   series: string;
   minPctDrop: string;
-  maxPctDrop: string;
   minTurnoverCr: string;
   minDelivPer: string;
+  minTurnoverMultiple: string;
 }
 
 const EMPTY_FILTERS: Filters = {
   date: '', series: '',
-  minPctDrop: '', maxPctDrop: '', minTurnoverCr: '', minDelivPer: '',
+  minPctDrop: '', minTurnoverCr: '', minDelivPer: '', minTurnoverMultiple: '',
 };
 
 function buildQueryParams(filters: Filters, page: number, limit: number, search: string) {
@@ -27,15 +27,15 @@ function buildQueryParams(filters: Filters, page: number, limit: number, search:
   if (filters.date) p.date = filters.date;
   if (filters.series) p.series = filters.series;
   if (filters.minPctDrop !== '' && !isNaN(Number(filters.minPctDrop))) p.minPctDrop = Number(filters.minPctDrop);
-  if (filters.maxPctDrop !== '' && !isNaN(Number(filters.maxPctDrop))) p.maxPctDrop = Number(filters.maxPctDrop);
   if (filters.minTurnoverCr !== '' && !isNaN(Number(filters.minTurnoverCr))) p.minTurnoverCr = Number(filters.minTurnoverCr);
   if (filters.minDelivPer !== '' && !isNaN(Number(filters.minDelivPer))) p.minDelivPer = Number(filters.minDelivPer);
+  if (filters.minTurnoverMultiple !== '' && !isNaN(Number(filters.minTurnoverMultiple))) p.minTurnoverMultiple = Number(filters.minTurnoverMultiple);
   return p;
 }
 
 function countActiveFilters(f: Filters, search: string): number {
   return [
-    f.date, f.series, search, f.minPctDrop, f.maxPctDrop, f.minTurnoverCr, f.minDelivPer,
+    f.date, f.series, search, f.minPctDrop, f.minTurnoverCr, f.minDelivPer, f.minTurnoverMultiple,
   ].filter(v => v !== '' && v != null).length;
 }
 
@@ -114,11 +114,11 @@ export default function BhavCopyPage() {
         const prev = row?.prevClose != null ? Number(row.prevClose) : NaN;
         const close = row?.closePrice != null ? Number(row.closePrice) : NaN;
         if (!isFinite(prev) || !isFinite(close) || prev === 0) return '—';
-        const pct = ((prev - close) * 100) / prev;
+        const pct = ((close - prev) * 100) / prev;
         const cls = pct > 0
-          ? 'text-rose-500 dark:text-rose-400'
+          ? 'text-emerald-600 dark:text-emerald-400'
           : pct < 0
-            ? 'text-emerald-600 dark:text-emerald-400'
+            ? 'text-rose-500 dark:text-rose-400'
             : 'text-slate-500 dark:text-slate-400';
         return <span className={`font-mono font-semibold tabular-nums ${cls}`}>{pct.toFixed(2)}%</span>;
       },
@@ -132,6 +132,19 @@ export default function BhavCopyPage() {
         const cr = Number(v) / 100;
         if (cr >= 1000) return <span className="font-mono tabular-nums">₹{(cr / 1000).toFixed(2)}K Cr</span>;
         return <span className="font-mono tabular-nums">₹{cr.toFixed(2)} Cr</span>;
+      },
+    },
+    {
+      key: 'turnoverMultiple', header: 'Turnover ×Prev', sortable: true,
+      render: (v: any) => {
+        if (v == null || !isFinite(Number(v))) return '—';
+        const m = Number(v);
+        const cls = m >= 2
+          ? 'text-emerald-600 dark:text-emerald-400'
+          : m < 1
+            ? 'text-rose-500 dark:text-rose-400'
+            : 'text-slate-500 dark:text-slate-400';
+        return <span className={`font-mono font-semibold tabular-nums ${cls}`}>{m.toFixed(2)}×</span>;
       },
     },
     { key: 'totalTrades', header: 'Trades', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{Number(v).toLocaleString('en-IN')}</span> : '—' },
@@ -208,9 +221,9 @@ export default function BhavCopyPage() {
               <div className="flex flex-col gap-1">
                 <label
                   className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                  title="(Prev Close − Close) × 100 / Prev Close"
+                  title="(Close − Prev Close) × 100 / Prev Close — shows rows with percent change ≥ value"
                 >
-                  Min Percent Change
+                  Percent Change ≥
                 </label>
                 <input
                   type="number"
@@ -218,25 +231,7 @@ export default function BhavCopyPage() {
                   step="0.1"
                   value={filters.minPctDrop}
                   onChange={e => setFilter('minPctDrop', e.target.value)}
-                  placeholder="e.g. 2"
-                  className="input h-9 w-28 text-sm"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                  title="(Prev Close − Close) × 100 / Prev Close"
-                >
-                  Max Percent Change
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.1"
-                  value={filters.maxPctDrop}
-                  onChange={e => setFilter('maxPctDrop', e.target.value)}
-                  placeholder="e.g. 5"
+                  placeholder="e.g. 17"
                   className="input h-9 w-28 text-sm"
                 />
               </div>
@@ -279,16 +274,35 @@ export default function BhavCopyPage() {
                   className="input h-9 w-32 text-sm"
                 />
               </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  title="Turnover ÷ previous trading day's turnover (same symbol) — shows rows with multiple ≥ value"
+                >
+                  Min Turnover ×Prev
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min="0"
+                  value={filters.minTurnoverMultiple}
+                  onChange={e => setFilter('minTurnoverMultiple', e.target.value)}
+                  placeholder="e.g. 2"
+                  className="input h-9 w-32 text-sm"
+                />
+              </div>
             </div>
 
             {activeCount > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {filters.date && <FilterChip label={`Date: ${filters.date}`} onRemove={() => setFilter('date', '')} />}
                 {filters.series && <FilterChip label={`Series: ${filters.series}`} onRemove={() => setFilter('series', '')} />}
-                {filters.minPctDrop !== '' && <FilterChip label={`Min Percent Change: ${filters.minPctDrop}`} onRemove={() => setFilter('minPctDrop', '')} />}
-                {filters.maxPctDrop !== '' && <FilterChip label={`Max Percent Change: ${filters.maxPctDrop}`} onRemove={() => setFilter('maxPctDrop', '')} />}
+                {filters.minPctDrop !== '' && <FilterChip label={`Percent Change ≥ ${filters.minPctDrop}%`} onRemove={() => setFilter('minPctDrop', '')} />}
                 {filters.minTurnoverCr !== '' && <FilterChip label={`Turnover ≥ ₹${filters.minTurnoverCr} Cr`} onRemove={() => setFilter('minTurnoverCr', '')} />}
                 {filters.minDelivPer !== '' && <FilterChip label={`Delivery % ≥ ${filters.minDelivPer}`} onRemove={() => setFilter('minDelivPer', '')} />}
+                {filters.minTurnoverMultiple !== '' && <FilterChip label={`Turnover ×Prev ≥ ${filters.minTurnoverMultiple}`} onRemove={() => setFilter('minTurnoverMultiple', '')} />}
                 {search && <FilterChip label={`Search: ${search}`} onRemove={() => { setSearchInput(''); setSearch(''); setPage(1); }} />}
               </div>
             )}
