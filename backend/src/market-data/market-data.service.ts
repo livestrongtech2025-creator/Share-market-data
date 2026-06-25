@@ -464,4 +464,39 @@ export class MarketDataService {
       [date],
     );
   }
+
+  async getStockHistory(symbol: string, days: number): Promise<any[]> {
+    const safeDays = Math.min(days, 90);
+    const rows: any[] = await this.dataSource.query(
+      `SELECT
+         e.source_date          AS date,
+         e.series,
+         e.total_traded_value   AS turnover,
+         ROUND(
+           e.total_traded_value::numeric / NULLIF((
+             SELECT b2.total_traded_value FROM bhav_copy b2
+             WHERE UPPER(b2.symbol) = UPPER(e.symbol)
+               AND b2.series = e.series
+               AND b2.source_date < e.source_date
+             ORDER BY b2.source_date DESC
+             LIMIT 1
+           ), 0),
+           2
+         )                      AS "turnoverXPrev",
+         e.deliv_per            AS "deliveryPct"
+       FROM bhav_copy e
+       WHERE UPPER(e.symbol) = UPPER($1)
+         AND e.source_date >= CURRENT_DATE - ($2 * INTERVAL '1 day')
+       ORDER BY e.source_date DESC`,
+      [symbol, safeDays],
+    );
+
+    return rows.map(r => ({
+      date: r.date,
+      series: r.series,
+      turnover: r.turnover != null ? Number(r.turnover) : null,
+      turnoverXPrev: r.turnoverXPrev != null ? Number(r.turnoverXPrev) : null,
+      deliveryPct: r.deliveryPct != null ? Number(r.deliveryPct) : null,
+    }));
+  }
 }
