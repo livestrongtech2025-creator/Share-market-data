@@ -101,12 +101,7 @@ export default function BhavCopyPage() {
     { key: 'symbol', header: 'Symbol', sortable: true, render: (v: any) => <span className="font-bold tracking-wide text-slate-900 dark:text-white">{v || '—'}</span> },
     { key: 'series', header: 'Series', sortable: true, render: (v: any) => v ? <span className="badge badge-violet">{v}</span> : '—' },
     { key: 'sourceDate', header: 'Date', sortable: true, render: (v: any) => v ? <span className="font-mono text-xs tabular-nums">{new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span> : '—' },
-    { key: 'prevClose', header: 'Prev Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
-    { key: 'openPrice', header: 'Open', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
-    { key: 'highPrice', header: 'High', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">₹{Number(v).toFixed(2)}</span> : '—' },
-    { key: 'lowPrice', header: 'Low', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-rose-500 dark:text-rose-400">₹{Number(v).toFixed(2)}</span> : '—' },
-    { key: 'lastPrice', header: 'Last', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
-    { key: 'closePrice', header: 'Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-white">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'delivPer', header: 'Deliv %', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">{Number(v).toFixed(2)}%</span> : '—' },
     {
       key: 'pctDrop',
       header: 'Percent Change',
@@ -123,7 +118,6 @@ export default function BhavCopyPage() {
         return <span className={`font-mono font-semibold tabular-nums ${cls}`}>{pct.toFixed(2)}%</span>;
       },
     },
-    { key: 'avgPrice', header: 'Avg Price', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
     { key: 'totalTradedQty', header: 'Volume', sortable: true, render: (v: any) => <span className="font-mono tabular-nums">{formatVolume(v)}</span> },
     {
       key: 'totalTradedValue', header: 'Turnover (₹ Cr)', sortable: true,
@@ -147,9 +141,15 @@ export default function BhavCopyPage() {
         return <span className={`font-mono font-semibold tabular-nums ${cls}`}>{m.toFixed(2)}×</span>;
       },
     },
-    { key: 'totalTrades', header: 'Trades', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{Number(v).toLocaleString('en-IN')}</span> : '—' },
     { key: 'delivQty', header: 'Deliv Qty', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">{Number(v).toLocaleString('en-IN')}</span> : '—' },
-    { key: 'delivPer', header: 'Deliv %', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">{Number(v).toFixed(2)}%</span> : '—' },
+    { key: 'prevClose', header: 'Prev Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'openPrice', header: 'Open', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'highPrice', header: 'High', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'lowPrice', header: 'Low', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-rose-500 dark:text-rose-400">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'lastPrice', header: 'Last', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'closePrice', header: 'Close', sortable: true, render: (v: any) => v != null ? <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-white">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'avgPrice', header: 'Avg Price', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">₹{Number(v).toFixed(2)}</span> : '—' },
+    { key: 'totalTrades', header: 'Trades', sortable: true, render: (v: any) => v != null ? <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{Number(v).toLocaleString('en-IN')}</span> : '—' },
     { key: 'isin', header: 'ISIN', render: (v: any) => v ? <span className="font-mono text-xs text-slate-400">{v}</span> : '—' },
   ];
 
